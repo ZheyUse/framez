@@ -1,3 +1,5 @@
+**Visit website:** [sample.com](https://sample.com)
+
 # FrameZ
 
 **Batch photos. One frame. Zero effort.**
@@ -45,36 +47,6 @@ FrameZ is a modern web application that lets you batch-apply templates to multip
 
 ---
 
-## Getting Started
-
-### Prerequisites
-- Node.js 18+ and npm
-
-### Installation
-
-```bash
-# Clone the repository (or use your existing copy)
-git clone https://github.com/example/framez.git
-cd framez
-
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-### Production Build
-
-```bash
-npm run build
-npm start
-```
-
----
-
 ## Usage
 
 ### 1. Create a Template
@@ -103,29 +75,6 @@ npm start
 
 ---
 
-## Project Structure
-
-```
-framez/
-├── app/                      # Next.js pages
-│   ├── page.tsx              # Home page (template gallery)
-│   └── template/[id]/        # Template editor
-├── components/
-│   ├── home/                 # Home page components
-│   ├── template/             # Editor components
-│   ├── layout/               # Navbar, Logo
-│   └── shared/               # Reusable dialogs
-├── lib/
-│   ├── canvas/               # Compositor & export pipeline
-│   ├── storage/              # Dexie database
-│   └── utils/                # Image & file helpers
-├── store/                    # Zustand state stores
-├── hooks/                    # Custom React hooks
-└── types/                    # TypeScript interfaces
-```
-
----
-
 ## Browser Support
 
 - Chrome 90+
@@ -138,8 +87,3 @@ framez/
 ## License
 
 [MIT License](LICENSE)
-
----
-
-**Website:** [sample.com](https://sample.com)
-**Support:** support@sample.com
