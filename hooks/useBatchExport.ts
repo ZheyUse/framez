@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { runBatchExport, ExportOptions } from '@/lib/canvas/exportPipeline';
 import { UploadedImage } from '@/types/editor';
 import { Template } from '@/types/template';
+import { TextElement } from '@/types/textElement';
 
 interface Progress {
   done: number;
@@ -21,7 +22,12 @@ export function useBatchExport() {
   });
   const cancelRef = useRef({ cancelled: false });
 
-  const start = async (images: UploadedImage[], template: Template, options: ExportOptions) => {
+  const start = async (
+    images: UploadedImage[],
+    template: Template,
+    options: ExportOptions,
+    textElements?: TextElement[]
+  ) => {
     cancelRef.current = { cancelled: false };
     setProgress({ done: 0, total: images.length, running: true, finished: false, cancelled: false });
 
@@ -31,6 +37,7 @@ export function useBatchExport() {
       options,
       (done, total) => setProgress({ done, total, running: true, finished: false, cancelled: false }),
       cancelRef.current,
+      textElements,
     );
 
     if (!cancelRef.current.cancelled) {

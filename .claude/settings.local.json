@@ -3,7 +3,11 @@
     "allow": [
       "Skill(frontend-design)",
       "Bash(npx shadcn@latest add dialog alert-dialog toast progress skeleton badge input -y)",
-      "Bash(npx shadcn@latest add dialog alert-dialog progress skeleton badge input sonner -y)"
+      "Bash(npx shadcn@latest add dialog alert-dialog progress skeleton badge input sonner -y)",
+      "Bash(Get-Content \"C:\\\\Users\\\\Faith Claire Anne\\\\Documents\\\\ZheysProject\\\\framez\\\\package.json\")",
+      "Bash(ConvertFrom-Json)",
+      "Bash(Select-Object -ExpandProperty dependencies)",
+      "Bash(powershell *)"
     ]
   }
 }
