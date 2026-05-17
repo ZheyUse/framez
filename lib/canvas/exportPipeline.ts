@@ -1,0 +1,53 @@
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+import { compositeImage } from './compositor';
+import { UploadedImage } from '@/types/editor';
+import { Template } from '@/types/template';
+
+export interface ExportOptions {
+  format: 'png' | 'jpeg';
+  quality: number;
+}
+
+export async function runBatchExport(
+  images: UploadedImage[],
+  template: Template,
+  options: ExportOptions,
+  onProgress: (done: number, total: number) => void,
+  cancelRef: { cancelled: boolean },
+): Promise<void> {
+  const zip = new JSZip();
+  const ext = options.format === 'jpeg' ? 'jpg' : 'png';
+
+  for (let i = 0; i < images.length; i++) {
+    // Check cancellation BEFORE processing next image
+    if (cancelRef.cancelled) {
+      return;
+    }
+
+    const img = images[i];
+    const blob = await compositeImage({
+      photoDataURL: img.dataURL,
+      templateDataURL: template.dataURL,
+      outputWidth: img.width,
+      outputHeight: img.height,
+      format: options.format,
+      quality: options.quality,
+    });
+
+    // Check again after async operation - if cancelled, don't add to zip
+    if (cancelRef.cancelled) {
+      return;
+    }
+
+    const name = `${String(i + 1).padStart(4, '0')}_${img.name.replace(/\.[^.]+$/, '')}.${ext}`;
+    zip.file(name, blob);
+    onProgress(i + 1, images.length);
+
+    // Yield to UI thread every 10 images to prevent freeze
+    if ((i + 1) % 10 === 0) await new Promise((r) => setTimeout(r, 0));
+  }
+
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  saveAs(zipBlob, `${template.name}.zip`);
+}

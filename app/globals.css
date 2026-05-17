@@ -1,26 +1,174 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ===================================
+   FrameZ Design System Tokens
+   =================================== */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Core Backgrounds */
+  --bg-base: #0a0a0a;
+  --bg-surface: #111111;
+  --bg-elevated: #1a1a1a;
+
+  /* Borders */
+  --bg-border: #2a2a2a;
+
+  /* Accent - Electric Lime */
+  --accent: #aaff00;
+  --accent-dim: #88cc00;
+  --accent-glow: rgba(170, 255, 0, 0.15);
+
+  /* Text */
+  --text-primary: #ffffff;
+  --text-muted: #a0a0a0;
+  --text-dim: #505050;
+
+  /* Danger */
+  --danger: #ff4444;
+
+  /* Radius */
+  --radius: 8px;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* FrameZ Colors */
+  --color-base: var(--bg-base);
+  --color-surface: var(--bg-surface);
+  --color-elevated: var(--bg-elevated);
+  --color-border: var(--bg-border);
+  --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
+  --color-muted: var(--text-muted);
+  --color-danger: var(--danger);
+
+  /* Background/Foreground */
+  --color-background: var(--bg-base);
+  --color-foreground: var(--text-primary);
+
+  /* Cards/Modals */
+  --color-card: var(--bg-surface);
+  --color-card-foreground: var(--text-primary);
+  --color-popover: var(--bg-elevated);
+  --color-popover-foreground: var(--text-primary);
+
+  /* Primary (accent) */
+  --color-primary: var(--accent);
+  --color-primary-foreground: #000000;
+
+  /* Secondary */
+  --color-secondary: var(--bg-elevated);
+  --color-secondary-foreground: var(--text-primary);
+
+  /* Muted */
+  --color-muted-foreground: var(--text-muted);
+
+  /* Destructive */
+  --color-destructive: var(--danger);
+
+  /* Inputs */
+  --color-input: var(--bg-elevated);
+  --color-ring: var(--accent);
+
+  /* Font Families */
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-space-mono), ui-monospace, monospace;
+
+  /* Radius */
+  --radius: var(--radius);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ===================================
+   Base Styles
+   =================================== */
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-space-mono), ui-monospace, monospace;
+}
+
+/* ===================================
+   Custom Scrollbar
+   =================================== */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
+/* ===================================
+   Selection
+   =================================== */
+
+::selection {
+  background-color: var(--accent);
+  color: #000000;
+}
+
+/* ===================================
+   Animations
+   =================================== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseAccent {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(170, 255, 0, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(170, 255, 0, 0.4);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.4s ease-out forwards;
+}
+
+.animate-pulseAccent {
+  animation: pulseAccent 2s ease-in-out infinite;
 }
