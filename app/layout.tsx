@@ -20,6 +20,9 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "FrameZ",
   description: "Batch photos. One frame. Zero effort.",
+  icons: {
+    icon: "/Framez-favicon.svg",
+  },
 };
 
 export default function RootLayout({
