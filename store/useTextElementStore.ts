@@ -34,7 +34,7 @@ interface TextElementStoreState {
   deleteElement: (id: string) => void;
   deleteSelected: () => void;
   selectElement: (id: string | null) => void;
-  toggleMultiSelect: (id) => void;
+  toggleMultiSelect: (id: string) => void;
   shiftSelect: (id: string, orderedIds?: string[]) => void;
   ctrlShiftSelect: (id: string, orderedIds: string[]) => void;
   selectAll: () => void;
