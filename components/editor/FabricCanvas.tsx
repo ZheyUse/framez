@@ -79,6 +79,7 @@ export default function FabricCanvas({
       const fs = fabricModule as unknown as {
         Canvas: new (el: HTMLCanvasElement, options?: Record<string, unknown>) => FabricCanvasInstance;
         IText: new (text: string, options?: Record<string, unknown>) => TextObj;
+        Textbox: new (text: string, options?: Record<string, unknown>) => TextObj;
       };
 
       fabricCanvas = new fs.Canvas(canvasRef.current, {
@@ -189,17 +190,15 @@ export default function FabricCanvas({
   const createTextObject = useCallback(async (element: TextElement): Promise<TextObj | null> => {
     try {
       const fabricModule = await import('fabric');
-      const fs = fabricModule as unknown as { IText: new (text: string, options?: Record<string, unknown>) => TextObj };
-      const IText = fs.IText;
+      const fs = fabricModule as unknown as { Textbox: new (text: string, options?: Record<string, unknown>) => TextObj };
 
       // Load font before creating text
       loadFont(element.style.fontFamily);
 
-      const text = new IText(element.text, {
+      const text = new fs.Textbox(element.text, {
         left: element.x,
         top: element.y,
         width: element.width,
-        height: element.height,
         fontFamily: element.style.fontFamily,
         fontSize: element.style.fontSize,
         fontWeight: String(element.style.fontWeight),
@@ -212,6 +211,7 @@ export default function FabricCanvas({
         charSpacing: (element.style.letterSpacing / element.style.fontSize) * 1000,
         originX: 'left',
         originY: 'top',
+        splitByGrapheme: false,
       }) as unknown as TextObj;
 
       text.set({ minScaleLimit: 0.01 });
@@ -256,6 +256,7 @@ export default function FabricCanvas({
       angle: element.angle,
     });
     obj.setCoords();
+    fabricCanvasRef.current?.renderAll();
   }, []);
 
   // Update all elements when they change
@@ -293,9 +294,6 @@ export default function FabricCanvas({
         }
       }
     }
-
-    // Re-render
-    canvas.renderAll();
   }, [createTextObject, updateTextObject]);
 
   // Sync elements with fabric canvas

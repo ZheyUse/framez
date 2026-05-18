@@ -479,9 +479,9 @@ export function FloatingToolbar({ canvasOffset, imageName }: FloatingToolbarProp
               />
             </div>
             <div className="mt-2 flex flex-wrap gap-1 max-w-[150px]">
-              {['#000000', '#ffffff', ...recentColors].map((color) => (
+              {[...new Set(['#000000', '#ffffff', ...recentColors])].map((color) => (
                 <button
-                  key={color}
+                  key={`swatch-${color}`}
                   onClick={() => handleColorChange(color)}
                   className="w-6 h-6 rounded border border-[#2a2a2a] hover:scale-110 transition-transform cursor-pointer"
                   style={{ backgroundColor: color }}
