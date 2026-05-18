@@ -19,6 +19,7 @@ interface ImagePreviewModalProps {
   templateDataURL: string;
   templateWidth: number;
   templateHeight: number;
+  templateOnTop?: boolean;
   textElements: TextElement[];
   open: boolean;
   onClose: () => void;
@@ -32,6 +33,7 @@ export function ImagePreviewModal({
   templateDataURL,
   templateWidth,
   templateHeight,
+  templateOnTop = true,
   textElements,
   open,
   onClose,
@@ -89,6 +91,7 @@ export function ImagePreviewModal({
         textElements: resolvedElements,
         canvasWidth: editorCanvasWidth,
         canvasHeight: editorCanvasHeight,
+        templateOnTop,
       });
 
       const url = URL.createObjectURL(blob);
@@ -137,6 +140,7 @@ export function ImagePreviewModal({
       textElements: resolvedElements,
       canvasWidth: editorCanvasWidth,
       canvasHeight: editorCanvasHeight,
+      templateOnTop,
     });
 
     const url = URL.createObjectURL(blob);

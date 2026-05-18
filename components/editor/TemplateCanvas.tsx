@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { TextElement, isGlobalText, getEffectiveStyle, getEffectiveValue } from '@/types/textElement';
+import { TextElement, TextElementStyle, isGlobalText, getEffectiveStyle, getEffectiveValue } from '@/types/textElement';
 import { UploadedImage } from '@/types/editor';
 import { Template } from '@/types/template';
 import { useTextElementStore } from '@/store/useTextElementStore';
@@ -21,20 +21,12 @@ interface TemplateCanvasProps {
   onPrev: () => void;
   onNext: () => void;
   onCanvasResize?: (width: number, height: number) => void;
+  templateOnTop?: boolean;
 }
 
 interface CanvasState {
   width: number;
   height: number;
-}
-
-function loadImg(src: string): Promise<HTMLImageElement> {
-  return new Promise((res, rej) => {
-    const img = new Image();
-    img.onload = () => res(img);
-    img.onerror = rej;
-    img.src = src;
-  });
 }
 
 export function TemplateCanvas({
@@ -45,9 +37,9 @@ export function TemplateCanvas({
   onPrev,
   onNext,
   onCanvasResize,
+  templateOnTop = true,
 }: TemplateCanvasProps) {
   const [canvasState, setCanvasState] = useState<CanvasState>({ width: 600, height: 338 });
-  const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const onCanvasResizeRef = useRef<TemplateCanvasProps['onCanvasResize']>(onCanvasResize);
@@ -148,58 +140,9 @@ export function TemplateCanvas({
     return () => observer.disconnect();
   }, []);
 
-  // Composite template + image into single background
   useEffect(() => {
-    const compositeBackground = async () => {
-      try {
-        const [tmpl] = await Promise.all([loadImg(template.dataURL)]);
-
-        const canvas = document.createElement('canvas');
-        canvas.width = canvasState.width;
-        canvas.height = canvasState.height;
-        const ctx = canvas.getContext('2d')!;
-
-        // Fill with dark background
-        ctx.fillStyle = '#0a0a0a';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Draw template
-        ctx.drawImage(tmpl, 0, 0, canvas.width, canvas.height);
-
-        // If there's a photo, draw it
-        if (activeImage) {
-          const [photo] = await Promise.all([loadImg(activeImage.dataURL)]);
-
-          const photoRatio = photo.naturalWidth / photo.naturalHeight;
-          const canvasRatio = canvas.width / canvas.height;
-          let dw: number, dh: number;
-
-          if (photoRatio > canvasRatio) {
-            dw = canvas.width;
-            dh = dw / photoRatio;
-          } else {
-            dh = canvas.height;
-            dw = dh * photoRatio;
-          }
-
-          const offsetX = (canvas.width - dw) / 2;
-          const offsetY = (canvas.height - dh) / 2;
-          ctx.drawImage(photo, offsetX, offsetY, dw, dh);
-
-          // Re-draw template on top
-          ctx.drawImage(tmpl, 0, 0, canvas.width, canvas.height);
-        }
-
-        setBackgroundImage(canvas.toDataURL());
-        setIsReady(true);
-      } catch (e) {
-        console.error('Failed to composite background:', e);
-        setIsReady(true);
-      }
-    };
-
-    compositeBackground();
-  }, [template.dataURL, activeImage, canvasState.width, canvasState.height]);
+    setIsReady(false);
+  }, [template.dataURL]);
 
   // Load fonts for all text elements
   useEffect(() => {
@@ -250,7 +193,7 @@ export function TemplateCanvas({
   }, [addElement, template.id, canvasState.width, canvasState.height]);
 
   const handleUpdateTextElement = useCallback(
-    (id: string, changes: Partial<TextElement>) => {
+    (id: string, changes: Partial<Omit<TextElement, 'style'>> & { style?: Partial<TextElementStyle> }) => {
       updateElement(id, changes);
     },
     [updateElement]
@@ -276,19 +219,28 @@ export function TemplateCanvas({
           className="relative"
           style={{ width: canvasState.width, height: canvasState.height }}
         >
-          {/* Background image (template + photo composite) */}
-          {backgroundImage && (
+          <div className="absolute inset-0" style={{ backgroundColor: '#0a0a0a' }} />
+
+          {/* Photo layer */}
+          {activeImage && (
             <img
-              src={backgroundImage}
-              alt="Template background"
-              className="absolute inset-0 w-full h-full object-contain"
-              style={{ backgroundColor: '#0a0a0a' }}
+              src={activeImage.dataURL}
+              alt="Uploaded photo"
+              className={`absolute inset-0 w-full h-full object-cover ${templateOnTop ? 'z-10' : 'z-20'}`}
             />
           )}
 
+          {/* Template layer */}
+          <img
+            src={template.dataURL}
+            alt="Template overlay"
+            className={`absolute inset-0 w-full h-full object-fill ${templateOnTop ? 'z-20' : 'z-10'}`}
+            onLoad={() => setIsReady(true)}
+          />
+
           {/* Fabric.js canvas overlay for text */}
           {isReady && (
-            <div className="absolute inset-0">
+            <div className="absolute inset-0 z-30">
               <FabricCanvas
                 elements={currentElements}
                 selectedId={selectedId}

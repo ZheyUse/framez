@@ -6,5 +6,6 @@ export interface Template {
   fileType: 'png' | 'svg';
   width: number;
   height: number;
+  templateOnTop?: boolean;
   createdAt: number;
 }

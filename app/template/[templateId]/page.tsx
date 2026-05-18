@@ -2,7 +2,26 @@
 
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverlay,
+  MeasuringStrategy,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { getTemplate } from '@/lib/storage/templates';
+import { updateTemplate } from '@/lib/storage/templates';
 import { loadTemplateTexts, saveTemplateTexts } from '@/lib/storage/templateTexts';
 import { Template } from '@/types/template';
 import { useEditorStore } from '@/store/useEditorStore';
@@ -18,10 +37,175 @@ import { ImagePreviewModal } from '@/components/template/ImagePreviewModal';
 import { DownloadProgress } from '@/components/template/DownloadProgress';
 import { Button } from '@/components/ui/button';
 import { UploadedImage } from '@/types/editor';
-import { Download, Type, Layers, X, Trash2 } from 'lucide-react';
+import { Download, Type, Layers, X, Trash2, Image as ImageIcon } from 'lucide-react';
+import { TextElement } from '@/types/textElement';
 
 interface PageProps {
   params: Promise<{ templateId: string }>;
+}
+
+// Sortable base layer item component
+function SortableBaseLayerItem({
+  id,
+  layer,
+  label,
+  templateOnTop,
+  activeIndex,
+}: {
+  id: string;
+  layer: 'template' | 'image';
+  label: string;
+  templateOnTop: boolean;
+  activeIndex: number;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition ?? 'transform 200ms ease',
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`w-full px-3 py-2 rounded-lg text-sm border transition-all flex items-center gap-2
+                  ${isDragging ? 'opacity-40 scale-95 bg-[#1a1a1a] ring-2 ring-[#aaff00] shadow-xl z-50 relative' : 'opacity-100'}
+                  border-[#2a2a2a] bg-[#0f0f0f] text-white`}
+    >
+      <span
+        {...listeners}
+        className="text-[#a0a0a0] cursor-grab active:cursor-grabbing hover:text-white transition-colors touch-none select-none"
+        style={{ fontFamily: 'var(--font-space-mono), monospace' }}
+      >
+        ⋮⋮
+      </span>
+      <span className="truncate" style={{ fontFamily: 'var(--font-space-mono), monospace' }}>
+        {label}
+      </span>
+      {layer === 'template' && (
+        <span className="ml-auto text-[10px] px-2 py-0.5 rounded bg-[#2a2a2a] text-[#a0a0a0]">
+          {templateOnTop ? 'Top' : 'Bottom'}
+        </span>
+      )}
+      {layer === 'image' && (
+        <span className="ml-auto text-[10px] px-2 py-0.5 rounded bg-[#aaff00]/20 text-[#aaff00]">
+          Page {activeIndex + 1}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// Sortable text layer item component
+function SortableTextLayerItem({
+  element,
+  isSelected,
+  multiSelectedIds,
+  displayElementIds,
+  displayElements,
+  activeIndex,
+  onSelect,
+  onToggleMultiSelect,
+  onClearMultiSelection,
+  onClosePanel,
+}: {
+  element: TextElement;
+  isSelected: boolean;
+  multiSelectedIds: string[];
+  displayElementIds: string[];
+  displayElements: TextElement[];
+  activeIndex: number;
+  onSelect: (id: string) => void;
+  onToggleMultiSelect: (id: string) => void;
+  onClearMultiSelection: () => void;
+  onClosePanel: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: element.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition ?? 'transform 200ms ease',
+  };
+
+  const isMultiSelected = multiSelectedIds.includes(element.id);
+  const isGlobal = element.imageIndex === undefined || element.imageIndex < 0;
+  const displayText = element.text || 'Empty text';
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (e.shiftKey && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      useTextElementStore.getState().ctrlShiftSelect(element.id, displayElementIds.filter(id =>
+        displayElements.some(d => d.id === id && (d.imageIndex === undefined || d.imageIndex < 0 || d.imageIndex === activeIndex))
+      ));
+    } else if (e.shiftKey) {
+      e.preventDefault();
+      useTextElementStore.getState().shiftSelect(element.id, displayElementIds.filter(id =>
+        displayElements.some(d => d.id === id && (d.imageIndex === undefined || d.imageIndex < 0 || d.imageIndex === activeIndex))
+      ));
+    } else if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      onToggleMultiSelect(element.id);
+    } else {
+      onSelect(element.id);
+      onClearMultiSelection();
+    }
+  };
+
+  const handleDoubleClick = () => {
+    onSelect(element.id);
+    onClosePanel();
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      className={`w-full px-3 py-2 rounded-lg text-sm border transition-all flex items-center gap-2 cursor-pointer select-none
+                  ${isDragging ? 'opacity-40 scale-95 ring-2 ring-[#aaff00] shadow-xl z-50 relative' : ''}
+                  ${isMultiSelected
+                    ? 'bg-[#aaff00]/20 text-[#aaff00] border-[#aaff00]'
+                    : isSelected
+                      ? 'bg-[#aaff00]/10 text-white border-[#aaff00]'
+                      : 'bg-[#1a1a1a] text-white border-[#2a2a2a] hover:bg-[#2a2a2a]'
+                  }`}
+    >
+      <span
+        {...listeners}
+        className="text-[#a0a0a0] cursor-grab active:cursor-grabbing hover:text-white transition-colors touch-none select-none"
+      >
+        ⋮⋮
+      </span>
+      <Type className="w-4 h-4 shrink-0 text-[#a0a0a0]" />
+      <div className="min-w-0 flex-1">
+        <span className="truncate block">{displayText}</span>
+        <span
+          className="text-[#a0a0a0] text-xs"
+          style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
+        >
+          {element.style.fontFamily}, {element.style.fontSize}px
+          {isGlobal && ' • Global'}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export default function TemplateEditorPage({ params }: PageProps) {
@@ -33,6 +217,8 @@ export default function TemplateEditorPage({ params }: PageProps) {
   const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
   const [showLayersPanel, setShowLayersPanel] = useState(false);
   const [canvasRenderSize, setCanvasRenderSize] = useState({ width: 600, height: 338 });
+  const [templateOnTop, setTemplateOnTop] = useState(true);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   const { images, activeIndex, addImages, removeImage, setActive, clear } = useEditorStore();
@@ -117,6 +303,7 @@ export default function TemplateEditorPage({ params }: PageProps) {
         return;
       }
       setTemplate(tmpl);
+      setTemplateOnTop(tmpl.templateOnTop ?? true);
       setCurrentTemplateId(templateId);
       setLoading(false);
     };
@@ -157,9 +344,53 @@ export default function TemplateEditorPage({ params }: PageProps) {
 
   const activeImage = images.length > 0 ? images[activeIndex] : null;
 
+  const baseLayerOrder = useMemo(() => {
+    return templateOnTop ? (['template', 'image'] as const) : (['image', 'template'] as const);
+  }, [templateOnTop]);
+
+  // Dnd-kit sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   // Display elements in reverse order (top layer first)
   const displayElements = useMemo(() => [...elements].reverse(), [elements]);
   const displayElementIds = useMemo(() => displayElements.map((el) => el.id), [displayElements]);
+
+  // Handle text layer reorder with dnd-kit
+  const handleTextDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    const activeIdx = elements.findIndex(el => el.id === activeId);
+    const overIdx = elements.findIndex(el => el.id === overId);
+
+    if (activeIdx === -1 || overIdx === -1) return;
+
+    // Elements are in reverse render order internally (bottom layer first)
+    // We need to account for the reversed display
+    const displayActiveIdx = displayElementIds.indexOf(activeId);
+    const displayOverIdx = displayElementIds.indexOf(overId);
+
+    if (displayActiveIdx === -1 || displayOverIdx === -1) return;
+
+    // arrayMove works on the displayElements array which is reversed from elements
+    const newDisplayElements = arrayMove(displayElements, displayActiveIdx, displayOverIdx);
+
+    // Convert back to internal order (reverse)
+    const newElements = [...newDisplayElements].reverse();
+    setElements(newElements);
+  }, [elements, displayElements, displayElementIds, setElements]);
 
   if (loading || !template) {
     return (
@@ -223,11 +454,12 @@ export default function TemplateEditorPage({ params }: PageProps) {
             onPrev={() => setActive(Math.max(0, activeIndex - 1))}
             onNext={() => setActive(Math.min(images.length - 1, activeIndex + 1))}
             onCanvasResize={handleCanvasResize}
+            templateOnTop={templateOnTop}
           />
         </div>
 
         {/* Layers Panel Toggle Button */}
-        {elements.length > 0 && !showLayersPanel && (
+        {(images.length > 0 || elements.length > 0) && !showLayersPanel && (
           <button
             onClick={() => setShowLayersPanel(true)}
             className="fixed right-4 top-32 z-30 w-10 h-10 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg
@@ -237,7 +469,7 @@ export default function TemplateEditorPage({ params }: PageProps) {
           >
             <Layers className="w-5 h-5" />
             <span className="absolute -top-1 -right-1 w-5 h-5 bg-[#aaff00] text-black text-xs font-bold rounded-full flex items-center justify-center">
-              {elements.length}
+              {Math.max(images.length, elements.length)}
             </span>
           </button>
         )}
@@ -248,7 +480,7 @@ export default function TemplateEditorPage({ params }: PageProps) {
             {/* Backdrop */}
             <div
               className="fixed inset-0 bg-black/20 z-30"
-              onClick={() => { setShowLayersPanel(false); clearMultiSelection(); }}
+              onClick={() => { setShowLayersPanel(false); clearMultiSelection(); setActiveDragId(null); }}
             />
 
             {/* Panel */}
@@ -260,122 +492,233 @@ export default function TemplateEditorPage({ params }: PageProps) {
                     className="text-white text-sm font-medium"
                     style={{ fontFamily: 'var(--font-space-mono), monospace' }}
                   >
-                    Layers ({elements.length})
+                    Layers
                     {multiSelectedIds.length > 0 && (
                       <span className="ml-2 text-[#a0a0a0]">({multiSelectedIds.length} selected)</span>
                     )}
                   </h3>
                 </div>
                 <button
-                  onClick={() => { setShowLayersPanel(false); clearMultiSelection(); }}
+                  onClick={() => { setShowLayersPanel(false); clearMultiSelection(); setActiveDragId(null); }}
                   className="w-6 h-6 flex items-center justify-center rounded text-[#a0a0a0] hover:text-white hover:bg-[#2a2a2a] transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Actions bar */}
-              {elements.length > 1 && (
-                <div className="flex items-center gap-2 px-3 py-2 border-b border-[#2a2a2a]">
-                  <button
-                    onClick={() => selectAll()}
-                    className="text-xs text-[#a0a0a0] hover:text-[#aaff00] transition-colors cursor-pointer"
+              {/* Base layer controls - separate DndContext for base layers */}
+              <DndContext
+                sensors={sensors}
+                measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+                onDragStart={({ active }) => setActiveDragId(active.id as string)}
+                onDragEnd={(event) => {
+                  setActiveDragId(null);
+                  const { active, over } = event;
+
+                  // Only swap if dropped on the other item
+                  if (!over || active.id === over.id) return;
+                  if (!active.id.toString().startsWith('base-layer-')) return;
+
+                  // Use functional updater to avoid stale closure
+                  setTemplateOnTop((prev) => {
+                    const next = !prev;
+                    if (templateId) updateTemplate(templateId, { templateOnTop: next });
+                    return next;
+                  });
+                }}
+              >
+                <div className="p-3 border-b border-[#2a2a2a]">
+                  <p
+                    className="text-[#a0a0a0] text-xs mb-2"
                     style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
                   >
-                    Select All (Ctrl+A)
-                  </button>
-                  {multiSelectedIds.length > 0 && (
-                    <button
-                      onClick={() => clearMultiSelection()}
-                      className="text-xs text-[#a0a0a0] hover:text-white transition-colors cursor-pointer"
-                      style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
-                    >
-                      Clear
-                    </button>
-                  )}
-                  {multiSelectedIds.length > 0 && (
-                    <button
-                      onClick={() => deleteSelected()}
-                      className="ml-auto flex items-center gap-1 px-2 py-1 bg-[#ff4444]/20 text-[#ff4444] hover:bg-[#ff4444]/30 rounded text-xs transition-colors cursor-pointer"
-                      style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      Delete ({multiSelectedIds.length})
-                    </button>
-                  )}
-                </div>
-              )}
+                    Base layers
+                  </p>
+                  <SortableContext items={baseLayerOrder.map(layer => `base-layer-${layer}`)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-1">
+                      {baseLayerOrder.map((layer) => {
+                        const layerId = `base-layer-${layer}`;
+                        const label = layer === 'template'
+                          ? 'Template'
+                          : activeImage
+                            ? `Image: ${activeImage.name}`
+                            : 'Image (none)';
 
-              <div className="p-3 overflow-y-auto max-h-[calc(100%-100px)]">
-                <p
-                  className="text-[#a0a0a0] text-xs mb-2"
-                  style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
-                >
-                  Ctrl+Click to toggle, Shift+Click for range
-                </p>
-                <div className="space-y-2">
-                  {displayElements.map((el) => {
-                    const isSelected = selectedId === el.id;
-                    const isMultiSelected = multiSelectedIds.includes(el.id);
-                    return (
-                      <button
-                        key={el.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (e.shiftKey && (e.ctrlKey || e.metaKey)) {
-                            // Ctrl+Shift+Click: extend selection with range (like Windows Explorer)
-                            e.preventDefault();
-                            useTextElementStore.getState().ctrlShiftSelect(el.id, displayElementIds);
-                          } else if (e.shiftKey) {
-                            // Shift+Click: recalculate range from anchor to clicked
-                            e.preventDefault();
-                            useTextElementStore.getState().shiftSelect(el.id, displayElementIds);
-                          } else if (e.ctrlKey || e.metaKey) {
-                            // Ctrl+Click: toggle individual item
-                            e.preventDefault();
-                            toggleMultiSelect(el.id);
-                          } else {
-                            selectElement(el.id);
-                            clearMultiSelection();
-                          }
-                        }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer flex items-center gap-2
-                                    ${isMultiSelected
-                                      ? 'bg-[#aaff00]/20 text-[#aaff00] border border-[#aaff00]'
-                                      : isSelected
-                                        ? 'bg-[#aaff00]/10 text-white border border-white/20'
+                        return (
+                          <SortableBaseLayerItem
+                            key={layerId}
+                            id={layerId}
+                            layer={layer}
+                            label={label}
+                            templateOnTop={templateOnTop}
+                            activeIndex={activeIndex}
+                          />
+                        );
+                      })}
+                    </div>
+                  </SortableContext>
+                </div>
+              </DndContext>
+
+                {/* Page tabs */}
+                {images.length > 1 && (
+                  <div className="px-3 py-2 border-b border-[#2a2a2a]">
+                    <p
+                      className="text-[#a0a0a0] text-xs mb-2"
+                      style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
+                    >
+                      Pages
+                    </p>
+                    <div className="flex gap-1 flex-wrap">
+                      {images.map((img, idx) => (
+                        <button
+                          key={img.id}
+                          onClick={() => setActive(idx)}
+                          className={`px-2 py-1 rounded text-xs transition-colors cursor-pointer
+                                      ${idx === activeIndex
+                                        ? 'bg-[#aaff00] text-black font-bold'
                                         : 'bg-[#1a1a1a] text-white hover:bg-[#2a2a2a]'
-                                    }`}
-                        style={{ fontFamily: `${el.style.fontFamily}, sans-serif` }}
-                      >
-                        {/* Selection indicator */}
-                        <span className={`w-4 h-4 rounded border flex items-center justify-center shrink-0
-                                        ${isMultiSelected
-                                          ? 'bg-[#aaff00] border-[#aaff00]'
-                                          : 'border-[#2a2a2a]'}`}>
-                          {isMultiSelected && (
-                            <svg className="w-3 h-3 text-black" viewBox="0 0 12 12" fill="none">
-                              <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          )}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <span className="truncate block">{el.text || 'Empty text'}</span>
+                                      }`}
+                          style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
+                        >
+                          {idx + 1}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Page layers content */}
+                <div className="p-3 overflow-y-auto max-h-[calc(100%-100px)]">
+                  {/* Current page image layer */}
+                  {activeImage && (
+                    <div className="mb-3">
+                      <div className="w-full px-3 py-2 rounded-lg text-sm border bg-[#1a1a1a] text-white border-[#2a2a2a]">
+                        <div className="flex items-center gap-2">
+                          <ImageIcon className="w-4 h-4 text-[#aaff00] shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <span className="truncate block" style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}>
+                              {activeImage.name}
+                            </span>
+                            <span
+                              className="text-[#a0a0a0] text-xs"
+                              style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
+                            >
+                              {activeImage.width} × {activeImage.height}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#2a2a2a]">
                           <span
-                            className="text-[#a0a0a0] text-xs"
+                            className="text-[#a0a0a0] text-[10px]"
                             style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
                           >
-                            {el.style.fontFamily}, {el.style.fontSize}px
+                            Page {activeIndex + 1} of {images.length}
                           </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeImage(activeImage.id);
+                            }}
+                            className="flex items-center gap-1 px-2 py-1 text-xs text-[#ff4444] hover:bg-[#ff4444]/20 rounded transition-colors cursor-pointer"
+                            style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                          </button>
                         </div>
-                      </button>
-                    );
-                  })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Text elements for current page - separate DndContext for text layers */}
+                  {displayElements.filter(el => {
+                    const isGlobal = el.imageIndex === undefined || el.imageIndex < 0;
+                    return isGlobal || el.imageIndex === activeIndex;
+                  }).length > 0 && (
+                    <DndContext
+                      sensors={sensors}
+                      measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+                      onDragStart={({ active }) => setActiveDragId(active.id as string)}
+                      onDragEnd={(event) => {
+                        setActiveDragId(null);
+                        handleTextDragEnd(event);
+                      }}
+                    >
+                      <SortableContext
+                        items={displayElementIds}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="mt-4 pt-4 border-t border-[#2a2a2a]">
+                          <p
+                            className="text-[#a0a0a0] text-xs mb-2"
+                            style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
+                          >
+                            Text layers ({displayElements.filter(el => {
+                              const isGlobal = el.imageIndex === undefined || el.imageIndex < 0;
+                              return isGlobal || el.imageIndex === activeIndex;
+                            }).length})
+                          </p>
+                          <div className="space-y-1">
+                            {displayElements.filter(el => {
+                              const isGlobal = el.imageIndex === undefined || el.imageIndex < 0;
+                              return isGlobal || el.imageIndex === activeIndex;
+                            }).map((el) => {
+                              return (
+                                <SortableTextLayerItem
+                                  key={el.id}
+                                  element={el}
+                                  isSelected={selectedId === el.id}
+                                  multiSelectedIds={multiSelectedIds}
+                                  displayElementIds={displayElementIds}
+                                  displayElements={displayElements}
+                                  activeIndex={activeIndex}
+                                  onSelect={selectElement}
+                                  onToggleMultiSelect={toggleMultiSelect}
+                                  onClearMultiSelection={clearMultiSelection}
+                                  onClosePanel={() => { setShowLayersPanel(false); setActiveDragId(null); }}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  )}
+
+                  {/* Actions bar for multi-selected items */}
+                  {multiSelectedIds.length > 1 && (
+                    <div className="mt-4 pt-4 border-t border-[#2a2a2a]">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => selectAll()}
+                          className="text-xs text-[#a0a0a0] hover:text-[#aaff00] transition-colors cursor-pointer"
+                          style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
+                        >
+                          Select All
+                        </button>
+                        <button
+                          onClick={() => clearMultiSelection()}
+                          className="text-xs text-[#a0a0a0] hover:text-white transition-colors cursor-pointer"
+                          style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
+                        >
+                          Clear
+                        </button>
+                        <button
+                          onClick={() => deleteSelected()}
+                          className="ml-auto flex items-center gap-1 px-2 py-1 bg-[#ff4444]/20 text-[#ff4444] hover:bg-[#ff4444]/30 rounded text-xs transition-colors cursor-pointer"
+                          style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Delete ({multiSelectedIds.length})
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
 
         {/* Mobile: Text elements list */}
         {elements.length > 0 && (
@@ -512,6 +855,7 @@ export default function TemplateEditorPage({ params }: PageProps) {
         templateDataURL={template.dataURL}
         templateWidth={template.width}
         templateHeight={template.height}
+        templateOnTop={templateOnTop}
         textElements={elements}
         open={previewImage !== null}
         onClose={() => setPreviewImage(null)}

@@ -46,6 +46,7 @@ export async function runBatchExport(
       textElements: resolvedElements.length > 0 ? resolvedElements : undefined,
       canvasWidth,
       canvasHeight,
+      templateOnTop: template.templateOnTop ?? true,
     });
 
     // Check again after async operation - if cancelled, don't add to zip

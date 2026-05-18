@@ -8,7 +8,9 @@
       "Bash(ConvertFrom-Json)",
       "Bash(Select-Object -ExpandProperty dependencies)",
       "Bash(powershell *)",
-      "Bash(Select-Object -First 50)"
+      "Bash(Select-Object -First 50)",
+      "Bash(npx next *)",
+      "Bash(Select-Object -First 30)"
     ]
   }
 }

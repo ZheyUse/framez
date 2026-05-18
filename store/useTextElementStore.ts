@@ -28,7 +28,7 @@ interface TextElementStoreState {
   // Actions
   setElements: (elements: TextElement[]) => void;
   addElement: (element: Partial<TextElement> & { text: string; templateId: string }) => string;
-  updateElement: (id: string, changes: Partial<TextElement>) => void;
+  updateElement: (id: string, changes: Partial<Omit<TextElement, 'style'>> & { style?: Partial<TextElementStyle> }) => void;
   updateStyleForCurrentImage: (id: string, styleChanges: Partial<TextElementStyle>) => void;
   updatePositionForCurrentImage: (id: string, changes: { x?: number; y?: number; width?: number; height?: number }) => void;
   deleteElement: (id: string) => void;

@@ -44,6 +44,7 @@ export default function Home() {
       fileType: selectedFile.type === 'image/svg+xml' ? 'svg' : 'png',
       width,
       height,
+      templateOnTop: true,
       createdAt: Date.now(),
     };
 

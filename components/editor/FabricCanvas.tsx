@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import { TextElement } from '@/types/textElement';
+import { TextElement, TextElementStyle } from '@/types/textElement';
 import { loadFont } from '@/lib/canvas/fontLoader';
 
 interface FabricCanvasProps {
@@ -10,7 +10,7 @@ interface FabricCanvasProps {
   canvasWidth: number;
   canvasHeight: number;
   onSelectElement: (id: string | null) => void;
-  onUpdateElement: (id: string, changes: Partial<TextElement>) => void;
+  onUpdateElement: (id: string, changes: Partial<Omit<TextElement, 'style'>> & { style?: Partial<TextElementStyle> }) => void;
   onDeleteElement: (id: string) => void;
 }
 
@@ -147,7 +147,7 @@ export default function FabricCanvas({
             y: target.top ?? 0,
             width: newWidth,
             height: newHeight,
-            style: { fontSize: newFontSize },
+            style: { fontSize: newFontSize } as Partial<TextElementStyle>,
             angle: target.angle ?? 0,
           });
         }

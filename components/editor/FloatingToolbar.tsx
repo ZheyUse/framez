@@ -136,7 +136,15 @@ export function FloatingToolbar({ canvasOffset, imageName }: FloatingToolbarProp
   const filteredFonts = fontSearchQuery
     ? FONTS.filter((font) => font.name.toLowerCase().includes(fontSearchQuery.toLowerCase()))
     : FONTS;
-  const visibleFonts = fontSearchQuery ? filteredFonts : filteredFonts.slice(0, 80);
+  const visibleFonts = filteredFonts;
+
+  // Load fonts for preview when dropdown opens
+  useEffect(() => {
+    if (!showFontDropdown) return;
+    // Load fonts in batches as they become visible
+    const fontsToPreload = filteredFonts.slice(0, 50);
+    fontsToPreload.forEach((font) => loadFont(font.name));
+  }, [showFontDropdown, fontSearchQuery]);
 
   const handleStyleChange = (changes: Partial<TextElementStyle>) => {
     if (selectedId) {

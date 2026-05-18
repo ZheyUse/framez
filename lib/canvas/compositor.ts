@@ -32,6 +32,7 @@ export interface CompositorInput {
   textElements?: TextElement[];
   canvasWidth?: number;
   canvasHeight?: number;
+  templateOnTop?: boolean;
 }
 
 function loadImg(src: string): Promise<HTMLImageElement> {
@@ -45,7 +46,7 @@ function loadImg(src: string): Promise<HTMLImageElement> {
 
 
 export async function compositeImage(input: CompositorInput): Promise<Blob> {
-  const { photoDataURL, templateDataURL, outputWidth, outputHeight, format, quality, textElements, canvasWidth = 600, canvasHeight = 338 } = input;
+  const { photoDataURL, templateDataURL, outputWidth, outputHeight, format, quality, textElements, canvasWidth = 600, canvasHeight = 338, templateOnTop = true } = input;
 
   // Calculate scale factors to map from canvas dimensions to output dimensions
   const scaleX = outputWidth / canvasWidth;
@@ -57,22 +58,32 @@ export async function compositeImage(input: CompositorInput): Promise<Blob> {
   canvas.height = outputHeight;
   const ctx = canvas.getContext('2d')!;
 
-  // Layer 1 (BOTTOM): user photo, cover-fit
-  const photoRatio = photo.naturalWidth / photo.naturalHeight;
-  const canvasRatio = outputWidth / outputHeight;
-  let dw: number, dh: number;
+  const drawPhoto = () => {
+    const photoRatio = photo.naturalWidth / photo.naturalHeight;
+    const canvasRatio = outputWidth / outputHeight;
+    let dw: number, dh: number;
 
-  if (photoRatio > canvasRatio) {
-    dh = outputHeight;
-    dw = dh * photoRatio;
+    if (photoRatio > canvasRatio) {
+      dh = outputHeight;
+      dw = dh * photoRatio;
+    } else {
+      dw = outputWidth;
+      dh = dw / photoRatio;
+    }
+    ctx.drawImage(photo, (outputWidth - dw) / 2, (outputHeight - dh) / 2, dw, dh);
+  };
+
+  const drawTemplate = () => {
+    ctx.drawImage(tmpl, 0, 0, outputWidth, outputHeight);
+  };
+
+  if (templateOnTop) {
+    drawPhoto();
+    drawTemplate();
   } else {
-    dw = outputWidth;
-    dh = dw / photoRatio;
+    drawTemplate();
+    drawPhoto();
   }
-  ctx.drawImage(photo, (outputWidth - dw) / 2, (outputHeight - dh) / 2, dw, dh);
-
-  // Layer 2 (TOP): template overlay — always full canvas
-  ctx.drawImage(tmpl, 0, 0, outputWidth, outputHeight);
 
   // Layer 3 (TEXT): if text elements provided
   if (textElements && textElements.length > 0) {
