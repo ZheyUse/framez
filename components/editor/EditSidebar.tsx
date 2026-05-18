@@ -2,9 +2,12 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Type, Image, FileCode } from 'lucide-react';
-import { useTextElementStore } from '@/store/useTextElementStore';
 import { TextPanel } from './TextPanel';
 import { ScriptPanel } from './ScriptPanel';
+
+// Module-level flag that any component can set to prevent sidebar from collapsing.
+// Usage in page components: onMouseDown={() => sidebarClickGuard.current = true}
+export const sidebarClickGuard = { current: false };
 
 export function EditSidebar() {
   const [activeTool, setActiveTool] = useState<'text' | 'elements' | 'script' | null>(null);
@@ -22,6 +25,12 @@ export function EditSidebar() {
   // Close on click outside the entire sidebar (both nav and content)
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
+      // Skip if a guard is active (click was on a page tool like prev/next)
+      if (sidebarClickGuard.current) {
+        sidebarClickGuard.current = false;
+        return;
+      }
+
       // Only close if clicking outside BOTH the nav and the content panel
       const clickedNav = navRef.current?.contains(e.target as Node);
       const clickedContent = contentRef.current?.contains(e.target as Node);

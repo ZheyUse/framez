@@ -7,6 +7,7 @@ import { UploadedImage } from '@/types/editor';
 import { Template } from '@/types/template';
 import { useTextElementStore } from '@/store/useTextElementStore';
 import { loadFont } from '@/lib/canvas/fontLoader';
+import { sidebarClickGuard } from './EditSidebar';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -48,12 +49,15 @@ export function TemplateCanvas({
   const {
     elements,
     selectedId,
+    multiSelectedIds,
     currentImageIndex,
     selectElement,
     selectAll,
+    setMultiSelectedIds,
     addElement,
     updateElement,
     deleteElement,
+    deleteSelected,
     setCurrentImageIndex,
     getElementsForCurrentImage,
   } = useTextElementStore();
@@ -72,11 +76,22 @@ export function TemplateCanvas({
         e.preventDefault();
         selectAll();
       }
+
+      // Delete = delete selected (single or multi)
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+        e.preventDefault();
+        if (multiSelectedIds.length > 1) {
+          deleteSelected();
+        } else {
+          deleteElement(selectedId);
+          selectElement(null);
+        }
+      }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [elements.length, selectAll]);
+  }, [elements.length, selectAll, selectedId, multiSelectedIds, deleteElement, deleteSelected, selectElement]);
 
   // Update current image index when activeIndex changes
   useEffect(() => {
@@ -244,9 +259,11 @@ export function TemplateCanvas({
               <FabricCanvas
                 elements={currentElements}
                 selectedId={selectedId}
+                multiSelectedIds={multiSelectedIds}
                 canvasWidth={canvasState.width}
                 canvasHeight={canvasState.height}
                 onSelectElement={selectElement}
+                onMultiSelectChange={setMultiSelectedIds}
                 onUpdateElement={handleUpdateTextElement}
                 onDeleteElement={handleDeleteTextElement}
               />
@@ -274,6 +291,7 @@ export function TemplateCanvas({
             variant="ghost"
             size="sm"
             onClick={onPrev}
+            onMouseDown={() => { sidebarClickGuard.current = true; }}
             disabled={activeIndex === 0}
             className="border border-[#2a2a2a] text-white hover:border-[#aaff00] hover:text-[#aaff00] transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
           >
@@ -291,6 +309,7 @@ export function TemplateCanvas({
             variant="ghost"
             size="sm"
             onClick={onNext}
+            onMouseDown={() => { sidebarClickGuard.current = true; }}
             disabled={activeIndex === total - 1}
             className="border border-[#2a2a2a] text-white hover:border-[#aaff00] hover:text-[#aaff00] transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
           >

@@ -354,14 +354,12 @@ export function FloatingToolbar({ canvasOffset, imageName }: FloatingToolbarProp
           <button
             onClick={() => setTextMode('all')}
             className={`px-2 py-1 text-xs rounded-md transition-colors cursor-pointer ${textMode === 'all' ? 'bg-[#aaff00] text-black font-bold' : 'text-[#a0a0a0] hover:text-white'}`}
-            style={{ fontFamily: 'var(--font-space-mono), monospace' }}
           >
             All
           </button>
           <button
             onClick={() => setTextMode('individual')}
             className={`px-2 py-1 text-xs rounded-md transition-colors cursor-pointer ${textMode === 'individual' ? 'bg-[#aaff00] text-black font-bold' : 'text-[#a0a0a0] hover:text-white'}`}
-            style={{ fontFamily: 'var(--font-space-mono), monospace' }}
           >
             Individual
           </button>
@@ -616,7 +614,7 @@ export function FloatingToolbar({ canvasOffset, imageName }: FloatingToolbarProp
             className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${style.textTransform !== 'none' ? 'bg-[#aaff00] text-black' : 'hover:bg-[#2a2a2a] text-white'}`}
             title="Text transform"
           >
-            <span className="text-xs font-bold" style={{ fontFamily: 'var(--font-space-mono), monospace' }}>AA</span>
+            <span className="text-xs font-bold">AA</span>
           </button>
           {showCaseDropdown && (
             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg z-50 shadow-xl min-w-[120px]">

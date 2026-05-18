@@ -222,18 +222,8 @@ export function TextPanel({ onClose, isMobile = false }: TextPanelProps) {
               <Plus className="w-4 h-4 text-[#aaff00]" />
             </div>
             <div className="text-left">
-              <p
-                className="text-white text-sm font-medium"
-                style={{ fontFamily: 'var(--font-space-mono), monospace' }}
-              >
-                {preset.label}
-              </p>
-              <p
-                className="text-[#a0a0a0] text-xs"
-                style={{ fontFamily: `${selectedFont}, sans-serif` }}
-              >
-                Size: {preset.size}px
-              </p>
+              <p className="text-white text-sm font-medium">{preset.label}</p>
+              <p className="text-[#a0a0a0] text-xs">Size: {preset.size}px</p>
             </div>
           </button>
         ))}

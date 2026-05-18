@@ -29,7 +29,7 @@ import { useTextElementStore } from '@/store/useTextElementStore';
 import { useBatchExport } from '@/hooks/useBatchExport';
 import { Navbar } from '@/components/layout/Navbar';
 import { TemplateCanvas } from '@/components/editor/TemplateCanvas';
-import { EditSidebar } from '@/components/editor/EditSidebar';
+import { EditSidebar, sidebarClickGuard } from '@/components/editor/EditSidebar';
 import { FloatingToolbar } from '@/components/editor/FloatingToolbar';
 import { ImageGrid } from '@/components/template/ImageGrid';
 import { ImageUploadZone } from '@/components/template/ImageUploadZone';
@@ -113,7 +113,6 @@ function SortableTextLayerItem({
   displayElements,
   activeIndex,
   onSelect,
-  onToggleMultiSelect,
   onClearMultiSelection,
   onClosePanel,
 }: {
@@ -124,7 +123,6 @@ function SortableTextLayerItem({
   displayElements: TextElement[];
   activeIndex: number;
   onSelect: (id: string) => void;
-  onToggleMultiSelect: (id: string) => void;
   onClearMultiSelection: () => void;
   onClosePanel: () => void;
 }) {
@@ -160,14 +158,21 @@ function SortableTextLayerItem({
       ));
     } else if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
-      onToggleMultiSelect(element.id);
+      // Toggle multi-select using direct store call (same pattern as shift/ctrl+shift)
+      const store = useTextElementStore.getState();
+      const current = store.multiSelectedIds;
+      const newSelection = current.includes(element.id)
+        ? current.filter((id) => id !== element.id)
+        : [...current, element.id];
+      store.setMultiSelectedIds(newSelection);
     } else {
       onSelect(element.id);
       onClearMultiSelection();
     }
   };
 
-  const handleDoubleClick = () => {
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     onSelect(element.id);
     onClosePanel();
   };
@@ -189,6 +194,7 @@ function SortableTextLayerItem({
     >
       <span
         {...listeners}
+        onPointerDown={(e) => e.stopPropagation()}
         className="text-[#a0a0a0] cursor-grab active:cursor-grabbing hover:text-white transition-colors touch-none select-none"
       >
         ⋮⋮
@@ -230,8 +236,6 @@ export default function TemplateEditorPage({ params }: PageProps) {
     setCurrentTemplateId,
     clear: clearTextElements,
     selectElement,
-    toggleMultiSelect,
-    shiftSelect,
     selectAll,
     clearMultiSelection,
     deleteSelected,
@@ -348,16 +352,16 @@ export default function TemplateEditorPage({ params }: PageProps) {
     return templateOnTop ? (['template', 'image'] as const) : (['image', 'template'] as const);
   }, [templateOnTop]);
 
-  // Dnd-kit sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+  // Sensors for base layers only - keeps KeyboardSensor so canvas fabric clicks work
+  const sensorsBase = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  // Sensors for text layers in panel - NO KeyboardSensor, only PointerSensor
+  // This avoids interfering with Ctrl+A keyboard shortcut
+  const sensorsText = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
   // Display elements in reverse order (top layer first)
@@ -462,6 +466,7 @@ export default function TemplateEditorPage({ params }: PageProps) {
         {(images.length > 0 || elements.length > 0) && !showLayersPanel && (
           <button
             onClick={() => setShowLayersPanel(true)}
+            onMouseDown={() => { sidebarClickGuard.current = true; }}
             className="fixed right-4 top-32 z-30 w-10 h-10 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg
                        flex items-center justify-center text-[#a0a0a0] hover:text-white hover:border-[#aaff00]
                        transition-all cursor-pointer shadow-lg"
@@ -508,7 +513,7 @@ export default function TemplateEditorPage({ params }: PageProps) {
 
               {/* Base layer controls - separate DndContext for base layers */}
               <DndContext
-                sensors={sensors}
+                sensors={sensorsBase}
                 measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
                 onDragStart={({ active }) => setActiveDragId(active.id as string)}
                 onDragEnd={(event) => {
@@ -574,6 +579,7 @@ export default function TemplateEditorPage({ params }: PageProps) {
                         <button
                           key={img.id}
                           onClick={() => setActive(idx)}
+                          onMouseDown={() => { sidebarClickGuard.current = true; }}
                           className={`px-2 py-1 rounded text-xs transition-colors cursor-pointer
                                       ${idx === activeIndex
                                         ? 'bg-[#aaff00] text-black font-bold'
@@ -637,7 +643,7 @@ export default function TemplateEditorPage({ params }: PageProps) {
                     return isGlobal || el.imageIndex === activeIndex;
                   }).length > 0 && (
                     <DndContext
-                      sensors={sensors}
+                      sensors={sensorsText}
                       measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
                       onDragStart={({ active }) => setActiveDragId(active.id as string)}
                       onDragEnd={(event) => {
@@ -674,7 +680,6 @@ export default function TemplateEditorPage({ params }: PageProps) {
                                   displayElements={displayElements}
                                   activeIndex={activeIndex}
                                   onSelect={selectElement}
-                                  onToggleMultiSelect={toggleMultiSelect}
                                   onClearMultiSelection={clearMultiSelection}
                                   onClosePanel={() => { setShowLayersPanel(false); setActiveDragId(null); }}
                                 />
@@ -693,21 +698,18 @@ export default function TemplateEditorPage({ params }: PageProps) {
                         <button
                           onClick={() => selectAll()}
                           className="text-xs text-[#a0a0a0] hover:text-[#aaff00] transition-colors cursor-pointer"
-                          style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
                         >
                           Select All
                         </button>
                         <button
                           onClick={() => clearMultiSelection()}
                           className="text-xs text-[#a0a0a0] hover:text-white transition-colors cursor-pointer"
-                          style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
                         >
                           Clear
                         </button>
                         <button
                           onClick={() => deleteSelected()}
                           className="ml-auto flex items-center gap-1 px-2 py-1 bg-[#ff4444]/20 text-[#ff4444] hover:bg-[#ff4444]/30 rounded text-xs transition-colors cursor-pointer"
-                          style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
                         >
                           <Trash2 className="w-3 h-3" />
                           Delete ({multiSelectedIds.length})

@@ -38,6 +38,7 @@ interface TextElementStoreState {
   shiftSelect: (id: string, orderedIds?: string[]) => void;
   ctrlShiftSelect: (id: string, orderedIds: string[]) => void;
   selectAll: () => void;
+  setMultiSelectedIds: (ids: string[]) => void;
   clearMultiSelection: () => void;
   setActivePanel: (panel: 'text' | null) => void;
   setCurrentTemplateId: (templateId: string) => void;
@@ -244,12 +245,10 @@ export const useTextElementStore = create<TextElementStoreState>((set, get) => (
     const { multiSelectedIds, selectedId } = get();
     const order = orderedIds || get().elements.map((el) => el.id);
 
-    // In Explorer behavior: the anchor is always the FIRST item of current selection
-    // If nothing is selected, just select this one
+    // Use last item of current selection as anchor (like Windows Explorer)
     let anchorId: string | null = null;
     if (multiSelectedIds.length > 0) {
-      // Use the first item in the current selection as anchor
-      anchorId = multiSelectedIds[0];
+      anchorId = multiSelectedIds.at(-1) ?? null; // Changed from [0] to at(-1)
     } else if (selectedId) {
       // No multi-selection yet, use single selectedId as anchor
       anchorId = selectedId;
@@ -294,10 +293,10 @@ export const useTextElementStore = create<TextElementStoreState>((set, get) => (
   ctrlShiftSelect: (id, orderedIds) => {
     const { multiSelectedIds, selectedId } = get();
 
-    // Use first item of current multi-selection as anchor, or single selectedId
+    // Use last item of current multi-selection as anchor (like Windows Explorer), or single selectedId
     let anchorId: string | null = null;
     if (multiSelectedIds.length > 0) {
-      anchorId = multiSelectedIds[0];
+      anchorId = multiSelectedIds.at(-1) ?? null; // Changed from [0] to at(-1)
     } else if (selectedId) {
       anchorId = selectedId;
     }
@@ -339,7 +338,15 @@ export const useTextElementStore = create<TextElementStoreState>((set, get) => (
 
   selectAll: () => {
     const { elements } = get();
-    set({ multiSelectedIds: elements.map((el) => el.id) });
+    const ids = elements.map((el) => el.id);
+    set({ multiSelectedIds: ids, selectedId: ids[ids.length - 1] || null });
+  },
+
+  setMultiSelectedIds: (ids) => {
+    const { selectedId } = get();
+    // If ids contains selectedId, keep it. Otherwise use the last one or null
+    const newSelectedId = ids.includes(selectedId || '') ? selectedId : (ids[ids.length - 1] || null);
+    set({ multiSelectedIds: ids, selectedId: newSelectedId });
   },
 
   clearMultiSelection: () => set({ multiSelectedIds: [], lastSelectedId: null }),

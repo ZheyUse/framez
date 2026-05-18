@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Mono, DM_Sans } from "next/font/google";
+import { Space_Mono, DM_Sans, Roboto } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -17,6 +17,13 @@ const dmSans = DM_Sans({
   display: "swap",
 });
 
+const roboto = Roboto({
+  weight: ["300", "400", "500", "700"],
+  subsets: ["latin"],
+  variable: "--font-roboto",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "FrameZ",
   description: "Batch photos. One frame. Zero effort.",
@@ -31,7 +38,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${spaceMono.variable} ${dmSans.variable}`}>
+    <html lang="en" className={`${spaceMono.variable} ${dmSans.variable} ${roboto.variable}`}>
       <body className="min-h-full flex flex-col bg-[#0a0a0a] text-white antialiased">
         {children}
         <Toaster

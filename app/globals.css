@@ -76,6 +76,7 @@
   /* Font Families */
   --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-space-mono), ui-monospace, monospace;
+  --font-roboto: var(--font-roboto), ui-sans-serif, system-ui, sans-serif;
 
   /* Radius */
   --radius: var(--radius);
@@ -171,4 +172,12 @@ h1, h2, h3 {
 
 .animate-pulseAccent {
   animation: pulseAccent 2s ease-in-out infinite;
+}
+
+/* ===================================
+   Button Typography
+   =================================== */
+
+button, [role="button"] {
+  font-family: var(--font-roboto), ui-sans-serif, system-ui, sans-serif;
 }
