@@ -134,16 +134,29 @@ export const useTextElementStore = create<TextElementStoreState>((set, get) => (
 
   updateElement: (id, changes) => {
     set((s) => ({
-      elements: s.elements.map((el) => (el.id === id ? { ...el, ...changes } : el)),
+      elements: s.elements.map((el) =>
+        el.id === id
+          ? { ...el, ...changes, style: changes.style ? { ...el.style, ...changes.style } : el.style }
+          : el
+      ),
     }));
   },
 
   updateStyleForCurrentImage: (id, styleChanges) => {
-    const { elements, currentImageIndex, saveToHistory } = get();
+    const { elements, currentImageIndex, saveToHistory, textMode } = get();
     const element = elements.find((el) => el.id === id);
     if (!element) return;
 
     saveToHistory();
+
+    if (isGlobalText(element) && textMode === 'all') {
+      set((s) => ({
+        elements: s.elements.map((el) =>
+          el.id === id ? { ...el, style: { ...el.style, ...styleChanges } } : el
+        ),
+      }));
+      return;
+    }
 
     if (isGlobalText(element)) {
       const currentOverride = element.overrides?.[currentImageIndex] || {};

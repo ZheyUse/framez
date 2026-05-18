@@ -1,6 +1,7 @@
 // CORE: pixel-perfect compositing. NEVER use html2canvas.
 
 import { TextElement, isGlobalText } from '@/types/textElement';
+import { loadFont } from '@/lib/canvas/fontLoader';
 
 // Helper to resolve text element values for a specific image
 export function resolveTextForImage(element: TextElement, imageIndex: number): TextElement {
@@ -29,6 +30,8 @@ export interface CompositorInput {
   format: 'png' | 'jpeg';
   quality: number;
   textElements?: TextElement[];
+  canvasWidth?: number;
+  canvasHeight?: number;
 }
 
 function loadImg(src: string): Promise<HTMLImageElement> {
@@ -40,8 +43,13 @@ function loadImg(src: string): Promise<HTMLImageElement> {
   });
 }
 
+
 export async function compositeImage(input: CompositorInput): Promise<Blob> {
-  const { photoDataURL, templateDataURL, outputWidth, outputHeight, format, quality, textElements } = input;
+  const { photoDataURL, templateDataURL, outputWidth, outputHeight, format, quality, textElements, canvasWidth = 600, canvasHeight = 338 } = input;
+
+  // Calculate scale factors to map from canvas dimensions to output dimensions
+  const scaleX = outputWidth / canvasWidth;
+  const scaleY = outputHeight / canvasHeight;
   const [photo, tmpl] = await Promise.all([loadImg(photoDataURL), loadImg(templateDataURL)]);
 
   const canvas = document.createElement('canvas');
@@ -68,8 +76,76 @@ export async function compositeImage(input: CompositorInput): Promise<Blob> {
 
   // Layer 3 (TEXT): if text elements provided
   if (textElements && textElements.length > 0) {
-    for (const element of textElements) {
-      await renderTextOnCanvas(ctx, element, outputWidth, outputHeight);
+    const uniqueFonts = Array.from(new Set(textElements.map((el) => el.style.fontFamily)));
+    uniqueFonts.forEach(loadFont);
+    if (typeof document !== 'undefined' && document.fonts) {
+      await Promise.all(
+        uniqueFonts.map((font) => document.fonts.load(`16px "${font}"`))
+      );
+      await document.fonts.ready;
+    }
+
+    let renderedWithFabric = false;
+
+    try {
+      const fabricModule = await import('fabric');
+      const fs = fabricModule as unknown as {
+        StaticCanvas: new (el: HTMLCanvasElement, options?: Record<string, unknown>) => {
+          add: (...objects: unknown[]) => void;
+          renderAll: () => void;
+        };
+        IText: new (text: string, options?: Record<string, unknown>) => unknown;
+      };
+
+      const offscreen = document.createElement('canvas');
+      offscreen.width = outputWidth;
+      offscreen.height = outputHeight;
+      const textCanvas = new fs.StaticCanvas(offscreen, {
+        width: outputWidth,
+        height: outputHeight,
+      });
+
+      for (const element of textElements) {
+        const { text, x, y, width, height, style } = element;
+        const scaledX = x * scaleX;
+        const scaledY = y * scaleY;
+        const scaledWidth = width * scaleX;
+        const scaledHeight = height * scaleY;
+        const fontSize = style.fontSize * scaleX;
+
+        const textObj = new fs.IText(text, {
+          left: scaledX,
+          top: scaledY,
+          width: scaledWidth,
+          height: scaledHeight,
+          fontFamily: style.fontFamily,
+          fontSize,
+          fontWeight: String(style.fontWeight || 400),
+          fontStyle: style.fontStyle,
+          fill: style.fill,
+          underline: style.textDecoration === 'underline',
+          linethrough: style.textDecoration === 'line-through',
+          textAlign: style.textAlign,
+          lineHeight: style.lineHeight,
+          charSpacing: (style.letterSpacing / style.fontSize) * 1000,
+          originX: 'left',
+          originY: 'top',
+        });
+
+        textCanvas.add(textObj);
+      }
+
+      textCanvas.renderAll();
+      ctx.drawImage(offscreen, 0, 0);
+      renderedWithFabric = true;
+    } catch {
+      renderedWithFabric = false;
+    }
+
+    if (!renderedWithFabric) {
+      for (const element of textElements) {
+        await renderTextOnCanvas(ctx, element, scaleX, scaleY);
+      }
     }
   }
 
@@ -86,35 +162,25 @@ export async function compositeImage(input: CompositorInput): Promise<Blob> {
 async function renderTextOnCanvas(
   ctx: CanvasRenderingContext2D,
   element: TextElement,
-  canvasWidth: number,
-  canvasHeight: number
+  scaleX: number,
+  scaleY: number
 ): Promise<void> {
   const { text, x, y, width, height, style } = element;
 
-  // Calculate scale factors based on original dimensions
-  const elementScaleX = canvasWidth / width;
-  const elementScaleY = canvasHeight / height;
+  // Scale position and size from canvas coordinates to output coordinates
+  const scaledX = x * scaleX;
+  const scaledY = y * scaleY;
+  const scaledWidth = width * scaleX;
+  const scaledHeight = height * scaleY;
 
-  // Handle case where element dimensions might be 0
-  const safeScaleX = elementScaleX > 0 ? elementScaleX : 1;
-  const safeScaleY = elementScaleY > 0 ? elementScaleY : 1;
-  const scale = Math.min(safeScaleX, safeScaleY);
-
-  // Scale position and size from element coordinates to canvas coordinates
-  const scaledX = x;
-  const scaledY = y;
-  const scaledWidth = width;
-  const scaledHeight = height;
-
-  // Set font
+  // Set font with scaled font size
   const fontStyle = style.fontStyle === 'italic' ? 'italic ' : '';
-  const fontWeight = style.fontWeight >= 600 ? 'bold' : 'normal';
-  const fontSize = style.fontSize * scale;
+  const fontWeight = String(style.fontWeight || 400);
+  const fontSize = style.fontSize * scaleX; // Scale by X since fonts are sized relative to canvas width in editor
 
   try {
     ctx.font = `${fontStyle}${fontWeight} ${fontSize}px "${style.fontFamily}", sans-serif`;
   } catch {
-    // Fallback if font loading failed
     ctx.font = `${fontStyle}${fontWeight} ${fontSize}px sans-serif`;
   }
 
@@ -127,37 +193,32 @@ async function renderTextOnCanvas(
   else if (style.textAlign === 'right') textAlign = 'right';
   ctx.textAlign = textAlign;
 
-  // Calculate text position
-  let textX = scaledX;
+  // Apply scaled padding
+  const paddingLeft = style.padding[3] * scaleX;
+  const paddingTop = style.padding[0] * scaleY;
+  const paddingRight = style.padding[1] * scaleX;
+
+  // Calculate scaled text position (include padding for left alignment)
+  let textX: number;
   if (style.textAlign === 'center') {
     textX = scaledX + scaledWidth / 2;
   } else if (style.textAlign === 'right') {
-    textX = scaledX + scaledWidth;
+    textX = scaledX + scaledWidth - paddingRight;
+  } else {
+    textX = scaledX + paddingLeft;
   }
 
-  // Apply letter spacing if supported
+  // Apply letter spacing if supported (scale by scaleX)
   if ('letterSpacing' in ctx) {
-    (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${style.letterSpacing}px`;
+    (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${style.letterSpacing * scaleX}px`;
   }
-
-  // Apply padding
-  const paddingLeft = style.padding[3];
-  const paddingTop = style.padding[0];
-  const paddingRight = style.padding[1];
 
   // Wrap text to fit within bounds
   const maxWidth = scaledWidth - paddingLeft - paddingRight;
   const lines = wrapText(ctx, text, maxWidth, fontSize, style.lineHeight);
 
-  // Calculate start Y for vertical centering within element
-  const totalTextHeight = lines.length * style.lineHeight * fontSize;
-  const elementHeight = scaledHeight - paddingTop - style.padding[2];
-  let startY = scaledY + paddingTop;
-
-  // If tall enough, center vertically
-  if (elementHeight > totalTextHeight) {
-    startY = scaledY + paddingTop + (elementHeight - totalTextHeight) / 2;
-  }
+  // Match Fabric's top-aligned text positioning
+  const startY = scaledY + paddingTop;
 
   let currentY = startY;
 
@@ -184,29 +245,31 @@ async function renderTextOnCanvas(
     currentY += style.lineHeight * fontSize;
 
     // Draw underline or strikethrough
-    if (style.textDecoration === 'underline') {
+    if (style.textDecoration === 'underline' || style.textDecoration === 'line-through') {
       const metrics = ctx.measureText(displayText);
-      const underlineY = currentY - 2 * scale;
-      ctx.beginPath();
-      ctx.moveTo(textX - (style.textAlign === 'right' ? metrics.width : 0), underlineY);
-      ctx.lineTo(
-        textX + (style.textAlign === 'left' ? metrics.width : style.textAlign === 'center' ? metrics.width / 2 : 0),
-        underlineY
-      );
-      ctx.strokeStyle = style.fill;
-      ctx.lineWidth = Math.max(1, fontSize / 16);
-      ctx.stroke();
-    }
+      const textWidth = metrics.width;
+      let decorX1: number, decorX2: number;
+      if (style.textAlign === 'center') {
+        decorX1 = textX - textWidth / 2;
+        decorX2 = textX + textWidth / 2;
+      } else if (style.textAlign === 'right') {
+        decorX1 = textX - textWidth;
+        decorX2 = textX;
+      } else {
+        decorX1 = textX;
+        decorX2 = textX + textWidth;
+      }
 
-    if (style.textDecoration === 'line-through') {
-      const metrics = ctx.measureText(displayText);
-      const strikeY = currentY - style.lineHeight * fontSize / 2;
       ctx.beginPath();
-      ctx.moveTo(textX - (style.textAlign === 'right' ? metrics.width : 0), strikeY);
-      ctx.lineTo(
-        textX + (style.textAlign === 'left' ? metrics.width : style.textAlign === 'center' ? metrics.width / 2 : 0),
-        strikeY
-      );
+      if (style.textDecoration === 'underline') {
+        const underlineY = currentY + fontSize + fontSize * 0.12;
+        ctx.moveTo(decorX1, underlineY);
+        ctx.lineTo(decorX2, underlineY);
+      } else {
+        const strikeY = currentY + fontSize * 0.55;
+        ctx.moveTo(decorX1, strikeY);
+        ctx.lineTo(decorX2, strikeY);
+      }
       ctx.strokeStyle = style.fill;
       ctx.lineWidth = Math.max(1, fontSize / 16);
       ctx.stroke();

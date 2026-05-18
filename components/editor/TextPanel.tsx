@@ -116,7 +116,11 @@ export function TextPanel({ onClose, isMobile = false }: TextPanelProps) {
             value={fontSearchQuery}
             onChange={(e) => setFontSearchQuery(e.target.value)}
             placeholder="Search fonts..."
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowFontDropdown(true);
+            }}
+            onFocus={() => setShowFontDropdown(true)}
             className="w-full h-9 px-3 pr-10 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg text-white text-sm
                        focus:outline-none focus:border-[#aaff00] transition-colors"
             style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
@@ -144,6 +148,7 @@ export function TextPanel({ onClose, isMobile = false }: TextPanelProps) {
                     key={font}
                     onClick={() => {
                       setSelectedFont(font);
+                      loadFont(font);
                       setShowFontDropdown(false);
                     }}
                     className="w-full text-left px-3 py-2 text-white text-sm hover:bg-[#2a2a2a] rounded

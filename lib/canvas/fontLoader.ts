@@ -1,55 +1,4 @@
-const GOOGLE_FONTS = [
-  // Sans-serif popular
-  { name: 'Space Grotesk', category: 'sans-serif', weights: ['700'] },
-  { name: 'Montserrat', category: 'sans-serif', weights: ['400', '500', '600', '700', '800', '900'] },
-  { name: 'Poppins', category: 'sans-serif', weights: ['400', '500', '600', '700', '800'] },
-  { name: 'Inter', category: 'sans-serif', weights: ['400', '500', '600', '700', '800'] },
-  { name: 'Roboto', category: 'sans-serif', weights: ['400', '500', '700', '900'] },
-  { name: 'Open Sans', category: 'sans-serif', weights: ['400', '500', '600', '700', '800'] },
-  { name: 'Lato', category: 'sans-serif', weights: ['400', '700', '900'] },
-  { name: 'Oswald', category: 'sans-serif', weights: ['400', '500', '600', '700'] },
-  { name: 'Raleway', category: 'sans-serif', weights: ['400', '500', '600', '700', '800', '900'] },
-  { name: 'Nunito', category: 'sans-serif', weights: ['400', '600', '700', '800'] },
-  { name: 'Quicksand', category: 'sans-serif', weights: ['400', '500', '600', '700'] },
-  { name: 'DM Sans', category: 'sans-serif', weights: ['400', '500', '600', '700'] },
-  { name: 'Rubik', category: 'sans-serif', weights: ['400', '500', '600', '700', '800', '900'] },
-  { name: 'Karla', category: 'sans-serif', weights: ['400', '500', '600', '700'] },
-  { name: 'Manrope', category: 'sans-serif', weights: ['400', '500', '600', '700', '800'] },
-
-  // Serif
-  { name: 'Playfair Display', category: 'serif', weights: ['400', '500', '600', '700', '800', '900'] },
-  { name: 'Merriweather', category: 'serif', weights: ['400', '700', '900'] },
-  { name: 'Lora', category: 'serif', weights: ['400', '500', '600', '700'] },
-  { name: 'Crimson Text', category: 'serif', weights: ['400', '600', '700'] },
-  { name: 'Libre Baskerville', category: 'serif', weights: ['400', '700'] },
-  { name: 'Cormorant Garamond', category: 'serif', weights: ['400', '500', '600', '700'] },
-  { name: 'EB Garamond', category: 'serif', weights: ['400', '500', '600', '700', '800'] },
-  { name: 'Bitter', category: 'serif', weights: ['400', '500', '600', '700', '800', '900'] },
-
-  // Display/Impact
-  { name: 'Bebas Neue', category: 'display', weights: ['400'] },
-  { name: 'Anton', category: 'display', weights: ['400'] },
-  { name: 'Archivo Black', category: 'display', weights: ['400'] },
-  { name: 'Righteous', category: 'display', weights: ['400'] },
-  { name: 'Permanent Marker', category: 'handwriting', weights: ['400'] },
-  { name: 'Pacifico', category: 'handwriting', weights: ['400'] },
-  { name: 'Dancing Script', category: 'handwriting', weights: ['400', '500', '600', '700'] },
-  { name: 'Satisfy', category: 'handwriting', weights: ['400'] },
-  { name: 'Great Vibes', category: 'handwriting', weights: ['400'] },
-  { name: 'Caveat', category: 'handwriting', weights: ['400', '500', '600', '700'] },
-  { name: 'Sacramento', category: 'handwriting', weights: ['400'] },
-  { name: 'Leckerli One', category: 'handwriting', weights: ['400'] },
-
-  // Monospace
-  { name: 'Space Mono', category: 'monospace', weights: ['400', '700'] },
-  { name: 'Fira Code', category: 'monospace', weights: ['400', '500', '600', '700'] },
-  { name: 'Source Code Pro', category: 'monospace', weights: ['400', '500', '600', '700'] },
-
-  // Condensed
-  { name: 'Barlow Condensed', category: 'sans-serif', weights: ['400', '500', '600', '700', '800', '900'] },
-  { name: 'Teko', category: 'sans-serif', weights: ['400', '500', '600', '700'] },
-  { name: 'Fjalla One', category: 'sans-serif', weights: ['400'] },
-];
+import googleFonts from './googleFonts.json';
 
 interface FontInfo {
   name: string;
@@ -57,7 +6,7 @@ interface FontInfo {
   weights: string[];
 }
 
-export const FONTS = GOOGLE_FONTS as FontInfo[];
+export const FONTS = googleFonts as FontInfo[];
 
 const loadedFonts = new Set<string>();
 let googleFontsLinkId: string | null = null;
@@ -69,7 +18,7 @@ export function getGoogleFontsUrl(fonts: string[]): string {
     const font = FONTS.find((f) => f.name === fontName);
     const weights = font?.weights || ['400'];
     const w = weights.join(';');
-    return `family=${encodeURIComponent(fontName)}:${w}`;
+    return `family=${encodeURIComponent(fontName)}:wght@${w}`;
   });
 
   return `https://fonts.googleapis.com/css2?${families.join('&')}&display=swap`;
@@ -78,7 +27,8 @@ export function getGoogleFontsUrl(fonts: string[]): string {
 export function loadFont(fontName: string): void {
   if (loadedFonts.has(fontName)) return;
 
-  const url = getGoogleFontsUrl([fontName]);
+  loadedFonts.add(fontName);
+  const url = getGoogleFontsUrl(Array.from(loadedFonts));
 
   if (!googleFontsLinkId) {
     const existingLink = document.getElementById('google-fonts');
@@ -90,10 +40,7 @@ export function loadFont(fontName: string): void {
   if (googleFontsLinkId) {
     const link = document.getElementById(googleFontsLinkId);
     if (link) {
-      const currentHref = link.getAttribute('href') || '';
-      const baseUrl = currentHref.split('&family=')[0];
-      const newHref = baseUrl ? `${baseUrl}&family=${encodeURIComponent(fontName)}:400;700` : url;
-      link.setAttribute('href', newHref);
+      link.setAttribute('href', url);
     }
   } else {
     const link = document.createElement('link');
@@ -103,8 +50,6 @@ export function loadFont(fontName: string): void {
     document.head.appendChild(link);
     googleFontsLinkId = 'google-fonts';
   }
-
-  loadedFonts.add(fontName);
 }
 
 export function loadFonts(fontNames: string[]): void {

@@ -10,33 +10,33 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { UploadedImage } from '@/types/editor';
-import { downloadSingleImage } from '@/lib/canvas/compositor';
+import { TextElement } from '@/types/textElement';
+import { compositeImage, resolveTextForImage } from '@/lib/canvas/compositor';
 
 interface ImagePreviewModalProps {
   image: UploadedImage | null;
+  imageIndex: number;
   templateDataURL: string;
   templateWidth: number;
   templateHeight: number;
+  textElements: TextElement[];
   open: boolean;
   onClose: () => void;
-}
-
-function loadImg(src: string): Promise<HTMLImageElement> {
-  return new Promise((res, rej) => {
-    const img = new Image();
-    img.onload = () => res(img);
-    img.onerror = rej;
-    img.src = src;
-  });
+  canvasWidth?: number;
+  canvasHeight?: number;
 }
 
 export function ImagePreviewModal({
   image,
+  imageIndex,
   templateDataURL,
   templateWidth,
   templateHeight,
+  textElements,
   open,
   onClose,
+  canvasWidth: editorCanvasWidth,
+  canvasHeight: editorCanvasHeight,
 }: ImagePreviewModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [currentImage, setCurrentImage] = useState<UploadedImage | null>(null);
@@ -48,19 +48,20 @@ export function ImagePreviewModal({
     }
   }, [image]);
 
-  // Calculate canvas size based on template dimensions
+  // Calculate canvas size based on template dimensions (for display)
   const MAX_WIDTH = 700;
   const MAX_HEIGHT = 450;
 
-  const canvasWidth = templateWidth && templateHeight ? Math.min(templateWidth, MAX_WIDTH) : 600;
-  const canvasHeight = templateWidth && templateHeight
-    ? Math.round(templateHeight * (canvasWidth / templateWidth))
+  const displayWidth = templateWidth && templateHeight ? Math.min(templateWidth, MAX_WIDTH) : 600;
+  const displayHeight = templateWidth && templateHeight
+    ? Math.round(templateHeight * (displayWidth / templateWidth))
     : 400;
 
   // Ensure we cap height too
-  const finalCanvasHeight = Math.min(canvasHeight, MAX_HEIGHT);
-  const finalCanvasWidth = Math.round(canvasWidth * (finalCanvasHeight / canvasHeight));
+  const finalCanvasHeight = Math.min(displayHeight, MAX_HEIGHT);
+  const finalCanvasWidth = Math.round(displayWidth * (finalCanvasHeight / displayHeight));
 
+  // Draw using compositor for proper text rendering
   const drawCanvas = useCallback(async () => {
     if (!canvasRef.current || !currentImage || !open) return;
 
@@ -68,51 +69,46 @@ export function ImagePreviewModal({
     canvas.width = finalCanvasWidth;
     canvas.height = finalCanvasHeight;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // Fill background
-    ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Resolve text elements for this specific image
+    const resolvedElements = textElements
+      .map(el => resolveTextForImage(el, imageIndex))
+      .filter(el => {
+        // Filter out individual elements that don't apply to this image
+        const isGlobal = el.imageIndex === undefined || el.imageIndex < 0;
+        return isGlobal || el.imageIndex === imageIndex;
+      });
 
     try {
-      const [photo, tmpl] = await Promise.all([
-        loadImg(currentImage.dataURL),
-        loadImg(templateDataURL),
-      ]);
+      const blob = await compositeImage({
+        photoDataURL: currentImage.dataURL,
+        templateDataURL,
+        outputWidth: finalCanvasWidth,
+        outputHeight: finalCanvasHeight,
+        format: 'png',
+        quality: 1,
+        textElements: resolvedElements,
+        canvasWidth: editorCanvasWidth,
+        canvasHeight: editorCanvasHeight,
+      });
 
-      // Layer 1 (BOTTOM): user photo, contain-fit (entire photo visible, letterboxed)
-      const photoRatio = photo.naturalWidth / photo.naturalHeight;
-      const canvasRatio = canvas.width / canvas.height;
-
-      let dw: number, dh: number;
-
-      if (photoRatio > canvasRatio) {
-        // Photo is wider - fit to width
-        dw = canvas.width;
-        dh = dw / photoRatio;
-      } else {
-        // Photo is taller - fit to height
-        dh = canvas.height;
-        dw = dh * photoRatio;
-      }
-
-      // Center the photo within the canvas
-      const offsetX = (canvas.width - dw) / 2;
-      const offsetY = (canvas.height - dh) / 2;
-      ctx.drawImage(photo, offsetX, offsetY, dw, dh);
-
-      // Layer 2 (TOP): template overlay
-      ctx.drawImage(tmpl, 0, 0, canvas.width, canvas.height);
+      const url = URL.createObjectURL(blob);
+      const img = new window.Image();
+      img.onload = () => {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, finalCanvasWidth, finalCanvasHeight);
+        }
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
     } catch (e) {
-      console.error('Failed to draw image:', e);
+      console.error('Failed to composite image:', e);
     }
-  }, [currentImage, templateDataURL, open, finalCanvasWidth, finalCanvasHeight]);
+  }, [currentImage, imageIndex, textElements, templateDataURL, finalCanvasWidth, finalCanvasHeight, open, editorCanvasWidth, editorCanvasHeight]);
 
-  // Draw when image changes or modal opens
+  // Redraw when dependencies change
   useEffect(() => {
     if (open && currentImage) {
-      // Small delay to ensure canvas DOM is ready
       const timer = setTimeout(drawCanvas, 50);
       return () => clearTimeout(timer);
     }
@@ -120,13 +116,35 @@ export function ImagePreviewModal({
 
   const handleDownload = async () => {
     if (!currentImage) return;
-    await downloadSingleImage(
-      currentImage.dataURL,
+
+    // Resolve text elements for this specific image
+    const resolvedElements = textElements
+      .map(el => resolveTextForImage(el, imageIndex))
+      .filter(el => {
+        const isGlobal = el.imageIndex === undefined || el.imageIndex < 0;
+        return isGlobal || el.imageIndex === imageIndex;
+      });
+
+    const outputWidth = templateWidth || currentImage.width;
+    const outputHeight = templateHeight || currentImage.height;
+    const blob = await compositeImage({
+      photoDataURL: currentImage.dataURL,
       templateDataURL,
-      currentImage.width,
-      currentImage.height,
-      currentImage.name,
-    );
+      outputWidth,
+      outputHeight,
+      format: 'png',
+      quality: 1,
+      textElements: resolvedElements,
+      canvasWidth: editorCanvasWidth,
+      canvasHeight: editorCanvasHeight,
+    });
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = currentImage.name.replace(/\.[^.]+$/, '') + '_framed.png';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (

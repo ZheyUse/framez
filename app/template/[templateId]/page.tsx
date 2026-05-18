@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { getTemplate } from '@/lib/storage/templates';
 import { loadTemplateTexts, saveTemplateTexts } from '@/lib/storage/templateTexts';
@@ -32,6 +32,7 @@ export default function TemplateEditorPage({ params }: PageProps) {
   const [previewImage, setPreviewImage] = useState<UploadedImage | null>(null);
   const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
   const [showLayersPanel, setShowLayersPanel] = useState(false);
+  const [canvasRenderSize, setCanvasRenderSize] = useState({ width: 600, height: 338 });
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   const { images, activeIndex, addImages, removeImage, setActive, clear } = useEditorStore();
@@ -50,6 +51,13 @@ export default function TemplateEditorPage({ params }: PageProps) {
     deleteSelected,
   } = useTextElementStore();
   const { progress, start, cancel, reset } = useBatchExport();
+
+  const handleCanvasResize = useCallback((width: number, height: number) => {
+    setCanvasRenderSize((prev) => {
+      if (prev.width === width && prev.height === height) return prev;
+      return { width, height };
+    });
+  }, []);
 
   // Keyboard shortcuts for layers panel
   useEffect(() => {
@@ -128,9 +136,9 @@ export default function TemplateEditorPage({ params }: PageProps) {
     loadTexts();
   }, [templateId, setElements]);
 
-  // Save text elements when they change
+  // Save text elements when they change (including when empty to clear deleted elements)
   useEffect(() => {
-    if (!templateId || elements.length === 0) return;
+    if (!templateId) return;
     saveTemplateTexts(templateId, elements);
   }, [templateId, elements]);
 
@@ -144,7 +152,7 @@ export default function TemplateEditorPage({ params }: PageProps) {
 
   const handleStartExport = () => {
     if (!template || images.length === 0) return;
-    start(images, template, { format: 'png', quality: 0.95 }, elements);
+    start(images, template, { format: 'png', quality: 0.95 }, elements, canvasRenderSize.width, canvasRenderSize.height);
   };
 
   const activeImage = images.length > 0 ? images[activeIndex] : null;
@@ -214,6 +222,7 @@ export default function TemplateEditorPage({ params }: PageProps) {
             activeIndex={activeIndex}
             onPrev={() => setActive(Math.max(0, activeIndex - 1))}
             onNext={() => setActive(Math.min(images.length - 1, activeIndex + 1))}
+            onCanvasResize={handleCanvasResize}
           />
         </div>
 
@@ -499,11 +508,15 @@ export default function TemplateEditorPage({ params }: PageProps) {
       {/* Image Preview Modal */}
       <ImagePreviewModal
         image={previewImage}
+        imageIndex={previewImage ? images.findIndex(img => img.id === previewImage.id) : 0}
         templateDataURL={template.dataURL}
         templateWidth={template.width}
         templateHeight={template.height}
+        textElements={elements}
         open={previewImage !== null}
         onClose={() => setPreviewImage(null)}
+        canvasWidth={canvasRenderSize.width}
+        canvasHeight={canvasRenderSize.height}
       />
 
       {/* Mobile bottom padding for drawer */}

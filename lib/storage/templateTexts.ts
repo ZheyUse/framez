@@ -55,7 +55,7 @@ class TextElementsDB {
 
 export const textElementsDB = new TextElementsDB();
 
-// Debounced auto-save
+// Debounced auto-save (shorter delay for faster persistence)
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 export const saveTemplateTexts = (templateId: string, elements: TextElement[]): void => {
@@ -68,19 +68,18 @@ export const saveTemplateTexts = (templateId: string, elements: TextElement[]): 
       // Delete existing elements for this template
       await textElementsDB.deleteByTemplate(templateId);
 
-      // Add all current elements
-      const elementsToSave = elements.map((el) => ({
-        ...el,
-        templateId, // Ensure templateId is set
-      }));
-
-      if (elementsToSave.length > 0) {
+      // Add all current elements (WITHOUT overrides - Script changes are temporary)
+      if (elements.length > 0) {
+        const elementsToSave = elements.map((el) => {
+          const { overrides, ...rest } = el; // Exclude overrides
+          return { ...rest, templateId, overrides: {} }; // Include empty overrides
+        });
         await textElementsDB.putMany(elementsToSave);
       }
     } catch (e) {
       console.error('Failed to save template texts:', e);
     }
-  }, 500);
+  }, 100);
 };
 
 export const loadTemplateTexts = async (templateId: string): Promise<TextElement[]> => {

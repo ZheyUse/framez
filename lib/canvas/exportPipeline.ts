@@ -17,6 +17,8 @@ export async function runBatchExport(
   onProgress: (done: number, total: number) => void,
   cancelRef: { cancelled: boolean },
   textElements?: TextElement[],
+  canvasWidth?: number,
+  canvasHeight?: number,
 ): Promise<void> {
   const zip = new JSZip();
   const ext = options.format === 'jpeg' ? 'jpg' : 'png';
@@ -32,14 +34,18 @@ export async function runBatchExport(
     // Resolve text elements for this image (apply overrides)
     const resolvedElements = textElements?.map((el) => resolveTextForImage(el, i)) || [];
 
+    const outputWidth = template.width || img.width;
+    const outputHeight = template.height || img.height;
     const blob = await compositeImage({
       photoDataURL: img.dataURL,
       templateDataURL: template.dataURL,
-      outputWidth: img.width,
-      outputHeight: img.height,
+      outputWidth,
+      outputHeight,
       format: options.format,
       quality: options.quality,
       textElements: resolvedElements.length > 0 ? resolvedElements : undefined,
+      canvasWidth,
+      canvasHeight,
     });
 
     // Check again after async operation - if cancelled, don't add to zip

@@ -124,11 +124,30 @@ export default function FabricCanvas({
 
         const target = e.target;
         if (target?.elementId) {
+          const scaleX = target.scaleX ?? 1;
+          const scaleY = target.scaleY ?? 1;
+          const newWidth = (target.width ?? 0) * scaleX;
+          const newHeight = (target.height ?? 0) * scaleY;
+          const currentFontSize = (target as TextObj & { fontSize?: number }).fontSize ?? 16;
+          const scale = (scaleX + scaleY) / 2;
+          const newFontSize = Math.max(1, currentFontSize * scale);
+
+          // Apply the scale to dimensions and reset scale to keep model and canvas in sync.
+          target.set({
+            width: newWidth,
+            height: newHeight,
+            fontSize: newFontSize,
+            scaleX: 1,
+            scaleY: 1,
+          });
+          target.setCoords();
+
           onUpdateElement(target.elementId, {
             x: target.left ?? 0,
             y: target.top ?? 0,
-            width: (target.width ?? 0) * (target.scaleX ?? 1),
-            height: (target.height ?? 0) * (target.scaleY ?? 1),
+            width: newWidth,
+            height: newHeight,
+            style: { fontSize: newFontSize },
             angle: target.angle ?? 0,
           });
         }
@@ -179,17 +198,23 @@ export default function FabricCanvas({
       const text = new IText(element.text, {
         left: element.x,
         top: element.y,
+        width: element.width,
+        height: element.height,
         fontFamily: element.style.fontFamily,
         fontSize: element.style.fontSize,
-        fontWeight: element.style.fontWeight >= 600 ? 'bold' : 'normal',
+        fontWeight: String(element.style.fontWeight),
         fontStyle: element.style.fontStyle,
         fill: element.style.fill,
         underline: element.style.textDecoration === 'underline',
         linethrough: element.style.textDecoration === 'line-through',
         textAlign: element.style.textAlign,
+        lineHeight: element.style.lineHeight,
+        charSpacing: (element.style.letterSpacing / element.style.fontSize) * 1000,
         originX: 'left',
         originY: 'top',
       }) as unknown as TextObj;
+
+      text.set({ minScaleLimit: 0.01 });
 
       // Apply custom properties
       text.elementId = element.id;
@@ -212,16 +237,22 @@ export default function FabricCanvas({
   // Update text object properties
   const updateTextObject = useCallback((obj: TextObj, element: TextElement) => {
     obj.set({
+      text: element.text,
       left: element.x,
       top: element.y,
+      width: element.width,
+      height: element.height,
       fontFamily: element.style.fontFamily,
       fontSize: element.style.fontSize,
-      fontWeight: element.style.fontWeight >= 600 ? 'bold' : 'normal',
+      fontWeight: String(element.style.fontWeight),
       fontStyle: element.style.fontStyle,
       fill: element.style.fill,
       underline: element.style.textDecoration === 'underline',
       linethrough: element.style.textDecoration === 'line-through',
       textAlign: element.style.textAlign,
+      lineHeight: element.style.lineHeight,
+      charSpacing: (element.style.letterSpacing / element.style.fontSize) * 1000,
+      minScaleLimit: 0.01,
       angle: element.angle,
     });
     obj.setCoords();

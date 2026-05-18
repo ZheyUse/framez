@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { TextElement, isGlobalText, getEffectiveStyle, getEffectiveValue } from '@/types/textElement';
 import { UploadedImage } from '@/types/editor';
@@ -20,6 +20,7 @@ interface TemplateCanvasProps {
   activeIndex: number;
   onPrev: () => void;
   onNext: () => void;
+  onCanvasResize?: (width: number, height: number) => void;
 }
 
 interface CanvasState {
@@ -43,10 +44,14 @@ export function TemplateCanvas({
   activeIndex,
   onPrev,
   onNext,
+  onCanvasResize,
 }: TemplateCanvasProps) {
   const [canvasState, setCanvasState] = useState<CanvasState>({ width: 600, height: 338 });
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const onCanvasResizeRef = useRef<TemplateCanvasProps['onCanvasResize']>(onCanvasResize);
+  const lastSizeRef = useRef<CanvasState | null>(null);
 
   const {
     elements,
@@ -86,6 +91,10 @@ export function TemplateCanvas({
     setCurrentImageIndex(activeIndex);
   }, [activeIndex, setCurrentImageIndex]);
 
+  useEffect(() => {
+    onCanvasResizeRef.current = onCanvasResize;
+  }, [onCanvasResize]);
+
   // Calculate canvas size based on template dimensions
   useEffect(() => {
     const MAX_WIDTH = 800;
@@ -113,6 +122,31 @@ export function TemplateCanvas({
       setCanvasState({ width, height });
     }
   }, [template.width, template.height]);
+
+  // Track actual rendered canvas size with ResizeObserver
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateSize = () => {
+      const rect = container.getBoundingClientRect();
+      const width = Math.round(rect.width);
+      const height = Math.round(rect.height);
+      const last = lastSizeRef.current;
+      if (last && last.width === width && last.height === height) return;
+      lastSizeRef.current = { width, height };
+      onCanvasResizeRef.current?.(width, height);
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(() => {
+      updateSize();
+    });
+    observer.observe(container);
+
+    return () => observer.disconnect();
+  }, []);
 
   // Composite template + image into single background
   useEffect(() => {
@@ -238,6 +272,7 @@ export function TemplateCanvas({
       >
         {/* Canvas container */}
         <div
+          ref={containerRef}
           className="relative"
           style={{ width: canvasState.width, height: canvasState.height }}
         >

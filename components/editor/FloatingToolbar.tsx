@@ -43,6 +43,13 @@ export function FloatingToolbar({ canvasOffset, imageName }: FloatingToolbarProp
   const [showCaseDropdown, setShowCaseDropdown] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [fontSearchQuery, setFontSearchQuery] = useState('');
+  const [recentColors, setRecentColors] = useState<string[]>([]);
+  const [hexInput, setHexInput] = useState('');
+  const [colorHsv, setColorHsv] = useState({ h: 0, s: 0, v: 100 });
+  const [isPickingColor, setIsPickingColor] = useState(false);
+
+  const spectrumRef = useRef<HTMLDivElement>(null);
 
   const fontRef = useRef<HTMLDivElement>(null);
   const sizeRef = useRef<HTMLDivElement>(null);
@@ -126,12 +133,129 @@ export function FloatingToolbar({ canvasOffset, imageName }: FloatingToolbarProp
 
   if (!selectedElement || !style) return null;
 
+  const filteredFonts = fontSearchQuery
+    ? FONTS.filter((font) => font.name.toLowerCase().includes(fontSearchQuery.toLowerCase()))
+    : FONTS;
+  const visibleFonts = fontSearchQuery ? filteredFonts : filteredFonts.slice(0, 80);
+
   const handleStyleChange = (changes: Partial<TextElementStyle>) => {
     if (selectedId) {
       updateStyleForCurrentImage(selectedId, changes);
       if (changes.fontFamily) loadFont(changes.fontFamily);
     }
   };
+
+  const normalizeHex = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    return trimmed.startsWith('#') ? trimmed.toLowerCase() : `#${trimmed.toLowerCase()}`;
+  };
+
+  const isValidHex = (value: string) => /^#[0-9a-f]{6}$/i.test(value);
+
+  const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+  const hexToRgb = (hex: string) => {
+    const normalized = hex.replace('#', '');
+    const r = parseInt(normalized.slice(0, 2), 16);
+    const g = parseInt(normalized.slice(2, 4), 16);
+    const b = parseInt(normalized.slice(4, 6), 16);
+    return { r, g, b };
+  };
+
+  const rgbToHex = (r: number, g: number, b: number) =>
+    `#${[r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+
+  const rgbToHsv = (r: number, g: number, b: number) => {
+    const rr = r / 255;
+    const gg = g / 255;
+    const bb = b / 255;
+    const max = Math.max(rr, gg, bb);
+    const min = Math.min(rr, gg, bb);
+    const delta = max - min;
+
+    let h = 0;
+    if (delta !== 0) {
+      if (max === rr) h = ((gg - bb) / delta) % 6;
+      else if (max === gg) h = (bb - rr) / delta + 2;
+      else h = (rr - gg) / delta + 4;
+      h = Math.round(h * 60);
+      if (h < 0) h += 360;
+    }
+
+    const s = max === 0 ? 0 : Math.round((delta / max) * 100);
+    const v = Math.round(max * 100);
+    return { h, s, v };
+  };
+
+  const hsvToRgb = (h: number, s: number, v: number) => {
+    const hh = h / 60;
+    const ss = s / 100;
+    const vv = v / 100;
+    const c = vv * ss;
+    const x = c * (1 - Math.abs((hh % 2) - 1));
+    const m = vv - c;
+
+    let r = 0;
+    let g = 0;
+    let b = 0;
+
+    if (hh >= 0 && hh < 1) [r, g, b] = [c, x, 0];
+    else if (hh >= 1 && hh < 2) [r, g, b] = [x, c, 0];
+    else if (hh >= 2 && hh < 3) [r, g, b] = [0, c, x];
+    else if (hh >= 3 && hh < 4) [r, g, b] = [0, x, c];
+    else if (hh >= 4 && hh < 5) [r, g, b] = [x, 0, c];
+    else if (hh >= 5 && hh <= 6) [r, g, b] = [c, 0, x];
+
+    return {
+      r: Math.round((r + m) * 255),
+      g: Math.round((g + m) * 255),
+      b: Math.round((b + m) * 255),
+    };
+  };
+
+  const handleColorChange = (color: string) => {
+    handleStyleChange({ fill: color });
+    setRecentColors((prev) => {
+      const next = [color, ...prev.filter((c) => c.toLowerCase() !== color.toLowerCase())];
+      return next.slice(0, 8);
+    });
+    setHexInput(color);
+  };
+
+  useEffect(() => {
+    if (!style?.fill) return;
+    const normalized = normalizeHex(style.fill);
+    if (isValidHex(normalized)) {
+      setHexInput(normalized);
+      const { r, g, b } = hexToRgb(normalized);
+      setColorHsv(rgbToHsv(r, g, b));
+    }
+  }, [style?.fill]);
+
+  useEffect(() => {
+    if (!isPickingColor) return;
+    const handleMove = (e: MouseEvent) => {
+      const rect = spectrumRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const x = clamp(e.clientX - rect.left, 0, rect.width);
+      const y = clamp(e.clientY - rect.top, 0, rect.height);
+      const s = Math.round((x / rect.width) * 100);
+      const v = Math.round(100 - (y / rect.height) * 100);
+      setColorHsv((prev) => ({ ...prev, s, v }));
+      const rgb = hsvToRgb(colorHsv.h, s, v);
+      const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+      handleColorChange(hex);
+    };
+
+    const handleUp = () => setIsPickingColor(false);
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [isPickingColor, colorHsv.h]);
 
   const handleDuplicate = () => {
     if (selectedId) {
@@ -243,17 +367,114 @@ export function FloatingToolbar({ canvasOffset, imageName }: FloatingToolbarProp
             <div className="w-5 h-5 rounded border-2 border-white/30" style={{ backgroundColor: style.fill }} />
           </button>
           <div className="absolute top-full left-0 mt-1 p-3 bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 shadow-xl">
-            <input
-              type="color"
-              value={style.fill}
-              onChange={(e) => handleStyleChange({ fill: e.target.value })}
-              className="w-24 h-24 cursor-pointer border border-[#2a2a2a] rounded"
-            />
+            <div className="space-y-2">
+              <div>
+                <p
+                  className="text-[#a0a0a0] text-xs mb-1"
+                  style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
+                >
+                  Color Spectrum
+                </p>
+                <div
+                  ref={spectrumRef}
+                  className="relative w-48 h-28 rounded border border-[#2a2a2a] cursor-crosshair"
+                  style={{
+                    backgroundImage: `linear-gradient(to right, #fff, hsl(${colorHsv.h}, 100%, 50%)), linear-gradient(to top, #000, transparent)`,
+                  }}
+                  onMouseDown={(e) => {
+                    setIsPickingColor(true);
+                    const rect = spectrumRef.current?.getBoundingClientRect();
+                    if (!rect) return;
+                    const x = clamp(e.clientX - rect.left, 0, rect.width);
+                    const y = clamp(e.clientY - rect.top, 0, rect.height);
+                    const s = Math.round((x / rect.width) * 100);
+                    const v = Math.round(100 - (y / rect.height) * 100);
+                    setColorHsv((prev) => ({ ...prev, s, v }));
+                    const rgb = hsvToRgb(colorHsv.h, s, v);
+                    handleColorChange(rgbToHex(rgb.r, rgb.g, rgb.b));
+                  }}
+                >
+                  <div
+                    className="absolute w-3 h-3 rounded-full border border-white shadow"
+                    style={{
+                      left: `${colorHsv.s}%`,
+                      top: `${100 - colorHsv.v}%`,
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <p
+                  className="text-[#a0a0a0] text-xs mb-1"
+                  style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
+                >
+                  Hue Slider
+                </p>
+                <input
+                  type="range"
+                  min="0"
+                  max="360"
+                  value={colorHsv.h}
+                  onChange={(e) => {
+                    const h = parseInt(e.target.value, 10);
+                    const next = { ...colorHsv, h };
+                    setColorHsv(next);
+                    const rgb = hsvToRgb(next.h, next.s, next.v);
+                    handleColorChange(rgbToHex(rgb.r, rgb.g, rgb.b));
+                  }}
+                  className="w-48 h-2 rounded-lg appearance-none cursor-pointer"
+                  style={{
+                    background: 'linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)',
+                  }}
+                />
+              </div>
+
+              <div>
+                <p
+                  className="text-[#a0a0a0] text-xs mb-1"
+                  style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
+                >
+                  Color Picker
+                </p>
+                <input
+                  type="color"
+                  value={style.fill}
+                  onChange={(e) => handleColorChange(e.target.value)}
+                  className="w-14 h-10 cursor-pointer border border-[#2a2a2a] rounded"
+                />
+              </div>
+            </div>
+            <div className="mt-2">
+              <label
+                className="block text-[#a0a0a0] text-xs mb-1"
+                style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
+              >
+                Hex
+              </label>
+              <input
+                type="text"
+                value={hexInput}
+                onChange={(e) => {
+                  const next = normalizeHex(e.target.value);
+                  setHexInput(next);
+                  if (isValidHex(next)) {
+                    const { r, g, b } = hexToRgb(next);
+                    setColorHsv(rgbToHsv(r, g, b));
+                    handleColorChange(next);
+                  }
+                }}
+                placeholder="#ffffff"
+                className="w-full h-8 px-2 bg-[#0a0a0a] border border-[#2a2a2a] rounded text-white text-xs focus:outline-none focus:border-[#aaff00]"
+                style={{ fontFamily: 'var(--font-space-mono), monospace' }}
+              />
+            </div>
             <div className="mt-2 flex flex-wrap gap-1 max-w-[150px]">
-              {['#ffffff', '#000000', '#aaff00', '#ff4455', '#ffcc00', '#00ccff', '#ff00ff', '#00ff88'].map((color) => (
+              {['#000000', '#ffffff', ...recentColors].map((color) => (
                 <button
                   key={color}
-                  onClick={() => handleStyleChange({ fill: color })}
+                  onClick={() => handleColorChange(color)}
                   className="w-6 h-6 rounded border border-[#2a2a2a] hover:scale-110 transition-transform cursor-pointer"
                   style={{ backgroundColor: color }}
                 />
@@ -265,7 +486,12 @@ export function FloatingToolbar({ canvasOffset, imageName }: FloatingToolbarProp
         {/* Font selector */}
         <div ref={fontRef} className="relative">
           <button
-            onClick={() => { setShowFontDropdown(!showFontDropdown); setShowSizeDropdown(false); setShowCaseDropdown(false); }}
+            onClick={() => {
+              setShowFontDropdown(!showFontDropdown);
+              setShowSizeDropdown(false);
+              setShowCaseDropdown(false);
+              if (!showFontDropdown) setFontSearchQuery('');
+            }}
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-[#2a2a2a] transition-colors cursor-pointer max-w-[120px]"
             style={{ fontFamily: `${style.fontFamily}, sans-serif` }}
           >
@@ -278,12 +504,14 @@ export function FloatingToolbar({ canvasOffset, imageName }: FloatingToolbarProp
                 <input
                   type="text"
                   placeholder="Search fonts..."
+                  value={fontSearchQuery}
+                  onChange={(e) => setFontSearchQuery(e.target.value)}
                   className="w-full h-8 px-3 bg-[#0a0a0a] border border-[#2a2a2a] rounded text-white text-sm focus:outline-none focus:border-[#aaff00]"
                   style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}
                 />
               </div>
               <div className="p-2 max-h-[250px] overflow-y-auto">
-                {FONTS.slice(0, 40).map((font) => (
+                {visibleFonts.map((font) => (
                   <button
                     key={font.name}
                     onClick={() => { handleStyleChange({ fontFamily: font.name }); setShowFontDropdown(false); }}
@@ -314,10 +542,10 @@ export function FloatingToolbar({ canvasOffset, imageName }: FloatingToolbarProp
               <div className="p-2">
                 <input
                   type="number"
-                  min="8"
+                  min="1"
                   max="300"
                   value={style.fontSize}
-                  onChange={(e) => handleStyleChange({ fontSize: parseInt(e.target.value) || 16 })}
+                  onChange={(e) => handleStyleChange({ fontSize: parseInt(e.target.value) || 1 })}
                   className="w-full h-8 px-3 bg-[#0a0a0a] border border-[#2a2a2a] rounded text-white text-sm focus:outline-none focus:border-[#aaff00]"
                   style={{ fontFamily: 'var(--font-space-mono), monospace' }}
                 />
@@ -481,12 +709,12 @@ export function FloatingToolbar({ canvasOffset, imageName }: FloatingToolbarProp
               Unlock Text Override?
             </DialogTitle>
             <DialogDescription className="text-[#a0a0a0]" style={{ fontFamily: 'var(--font-dm-sans), sans-serif' }}>
-              <p className="mb-2">
+              <div className="mb-2">
                 This text has been customized for <strong className="text-white">{imageName || `image ${currentImageIndex + 1}`}</strong>.
-              </p>
-              <p className="mb-2">
+              </div>
+              <div className="mb-2">
                 <strong className="text-[#ff8800]">Warning:</strong> Unlocking will apply the global text settings (position, font, size, color, etc.) to this image. Your individual changes will be lost.
-              </p>
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">

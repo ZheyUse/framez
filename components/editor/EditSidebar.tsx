@@ -1,16 +1,17 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Type, Image } from 'lucide-react';
+import { Type, Image, FileCode } from 'lucide-react';
 import { useTextElementStore } from '@/store/useTextElementStore';
 import { TextPanel } from './TextPanel';
+import { ScriptPanel } from './ScriptPanel';
 
 export function EditSidebar() {
-  const [activeTool, setActiveTool] = useState<'text' | 'elements' | null>(null);
+  const [activeTool, setActiveTool] = useState<'text' | 'elements' | 'script' | null>(null);
   const navRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const handleToolClick = (tool: 'text' | 'elements') => {
+  const handleToolClick = (tool: 'text' | 'elements' | 'script') => {
     if (activeTool === tool) {
       setActiveTool(null);
     } else {
@@ -63,6 +64,21 @@ export function EditSidebar() {
             <Type className="w-5 h-5" />
           </button>
 
+          {/* Script Tool */}
+          <button
+            onClick={() => handleToolClick('script')}
+            className={`
+              w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer
+              ${activeTool === 'script'
+                ? 'bg-[#aaff00] text-black'
+                : 'text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white'
+              }
+            `}
+            title="Script"
+          >
+            <FileCode className="w-5 h-5" />
+          </button>
+
           {/* Elements Tool - Placeholder */}
           <button
             className="w-10 h-10 flex items-center justify-center rounded-lg text-[#a0a0a0]/40 cursor-not-allowed"
@@ -81,6 +97,17 @@ export function EditSidebar() {
             onMouseDown={(e) => e.stopPropagation()}
           >
             <TextPanel onClose={() => setActiveTool(null)} />
+          </div>
+        )}
+
+        {/* Script Content Panel */}
+        {activeTool === 'script' && (
+          <div
+            ref={contentRef}
+            className="w-[280px] bg-[#111111]/95 backdrop-blur-sm border-r border-[#2a2a2a] overflow-y-auto"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <ScriptPanel onClose={() => setActiveTool(null)} />
           </div>
         )}
       </div>
@@ -103,6 +130,20 @@ export function EditSidebar() {
             title="Text"
           >
             <Type className="w-5 h-5" />
+          </button>
+
+          <button
+            onClick={() => handleToolClick('script')}
+            className={`
+              w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer
+              ${activeTool === 'script'
+                ? 'bg-[#aaff00] text-black'
+                : 'text-[#a0a0a0] hover:bg-[#2a2a2a] hover:text-white'
+              }
+            `}
+            title="Script"
+          >
+            <FileCode className="w-5 h-5" />
           </button>
 
           <button
@@ -129,6 +170,25 @@ export function EditSidebar() {
             </div>
             <div className="h-[calc(100%-24px)] overflow-y-auto">
               <TextPanel onClose={() => setActiveTool(null)} isMobile />
+            </div>
+          </div>
+        )}
+
+        {/* Script Content Panel - Bottom Sheet */}
+        {activeTool === 'script' && (
+          <div
+            className="h-[50vh] bg-[#111111] border-t border-[#2a2a2a] rounded-t-2xl overflow-hidden"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {/* Drag handle */}
+            <div
+              className="flex items-center justify-center py-2 cursor-pointer"
+              onClick={() => setActiveTool(null)}
+            >
+              <div className="w-12 h-1 rounded-full bg-[#2a2a2a]" />
+            </div>
+            <div className="h-[calc(100%-24px)] overflow-y-auto">
+              <ScriptPanel onClose={() => setActiveTool(null)} isMobile />
             </div>
           </div>
         )}

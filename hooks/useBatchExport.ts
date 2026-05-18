@@ -26,7 +26,9 @@ export function useBatchExport() {
     images: UploadedImage[],
     template: Template,
     options: ExportOptions,
-    textElements?: TextElement[]
+    textElements?: TextElement[],
+    canvasWidth?: number,
+    canvasHeight?: number
   ) => {
     cancelRef.current = { cancelled: false };
     setProgress({ done: 0, total: images.length, running: true, finished: false, cancelled: false });
@@ -38,6 +40,8 @@ export function useBatchExport() {
       (done, total) => setProgress({ done, total, running: true, finished: false, cancelled: false }),
       cancelRef.current,
       textElements,
+      canvasWidth,
+      canvasHeight,
     );
 
     if (!cancelRef.current.cancelled) {

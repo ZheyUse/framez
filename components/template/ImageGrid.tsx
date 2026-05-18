@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ImageCard } from './ImageCard';
 import { UploadedImage } from '@/types/editor';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,7 @@ export function ImageGrid({ images, activeIndex, onSelect, onDelete, onAddMore }
   const totalPages = Math.ceil(images.length / ITEMS_PER_PAGE);
 
   // Reset to page 1 when images change
-  useMemo(() => {
+  useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
       setCurrentPage(1);
     }
